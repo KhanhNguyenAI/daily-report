@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+firebase-admin
+google-genai
+pydantic-settings
+python-dotenv
+pyjwt
