@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { createNote, deleteNote, listNotes, type Note } from "@/api/notes"
+import { createNote, deleteNote, listNotes, updateNote, type Note, type NoteInput } from "@/api/notes"
 import { createDailyReport, savedLanguage } from "@/api/reports"
 import { MOODS, moodEmoji, NoteCard } from "@/components/note-card"
 import { Button } from "@/components/ui/button"
@@ -115,6 +115,16 @@ export function Journal({ onReportCreated }: { onReportCreated?: () => void }) {
     }
   }
 
+  async function update(id: string, changes: Partial<NoteInput>) {
+    try {
+      await updateNote(id, changes)
+      toast.success("Note updated")
+      await refresh()
+    } catch {
+      toast.error("Failed to update note")
+    }
+  }
+
   return (
     <div className="grid items-start gap-5 lg:grid-cols-[1.15fr_0.85fr]">
       <div className="grid gap-5">
@@ -178,7 +188,7 @@ export function Journal({ onReportCreated }: { onReportCreated?: () => void }) {
         ) : (
           <div className="grid gap-3">
             {notes.map((n) => (
-              <NoteCard key={n.id} note={n} onDelete={remove} />
+              <NoteCard key={n.id} note={n} onDelete={remove} onUpdate={update} />
             ))}
           </div>
         )}

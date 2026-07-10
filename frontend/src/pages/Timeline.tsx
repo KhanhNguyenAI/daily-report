@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
-import { deleteNote, listNotes, type Note } from "@/api/notes"
+import { deleteNote, listNotes, updateNote, type Note, type NoteInput } from "@/api/notes"
 import { moodEmoji, NoteCard } from "@/components/note-card"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -86,6 +86,16 @@ export function Timeline() {
     }
   }
 
+  async function update(id: string, changes: Partial<NoteInput>) {
+    try {
+      await updateNote(id, changes)
+      toast.success("Note updated")
+      await refresh()
+    } catch {
+      toast.error("Failed to update note")
+    }
+  }
+
   return (
     <div className="grid items-start gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <Card className="shadow-none">
@@ -157,7 +167,7 @@ export function Timeline() {
         ) : (
           <div className="grid gap-3">
             {dayNotes.map((n) => (
-              <NoteCard key={n.id} note={n} onDelete={remove} />
+              <NoteCard key={n.id} note={n} onDelete={remove} onUpdate={update} />
             ))}
           </div>
         )}
