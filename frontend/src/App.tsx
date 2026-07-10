@@ -4,21 +4,11 @@ import { toast } from "sonner"
 import { downloadBackup } from "@/api/notes"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Toaster } from "@/components/ui/sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Journal } from "@/pages/Journal"
-
-function ComingSoon({ phase }: { phase: string }) {
-  return (
-    <Card>
-      <CardContent className="py-14 text-center">
-        <div className="mb-2 text-3xl">🌱</div>
-        <p className="text-sm text-muted-foreground">Coming soon — planned for {phase}.</p>
-      </CardContent>
-    </Card>
-  )
-}
+import { Reports } from "@/pages/Reports"
+import { Timeline } from "@/pages/Timeline"
 
 export default function App() {
   const [exporting, setExporting] = useState(false)
@@ -81,10 +71,10 @@ export default function App() {
           <Journal />
         </TabsContent>
         <TabsContent value="timeline">
-          <ComingSoon phase="Phase 4" />
+          <Timeline />
         </TabsContent>
         <TabsContent value="reports">
-          <ComingSoon phase="Phase 2 (AI reports in English / 日本語 / Tiếng Việt)" />
+          <Reports />
         </TabsContent>
       </Tabs>
 

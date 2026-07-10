@@ -2,26 +2,14 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { createNote, deleteNote, listNotes, type Note } from "@/api/notes"
-import { Badge } from "@/components/ui/badge"
+import { MOODS, moodEmoji, NoteCard } from "@/components/note-card"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
-const MOODS = [
-  { value: 1, emoji: "😫", label: "Rough" },
-  { value: 2, emoji: "🙁", label: "Meh" },
-  { value: 3, emoji: "😐", label: "Okay" },
-  { value: 4, emoji: "🙂", label: "Good" },
-  { value: 5, emoji: "😄", label: "Great" },
-]
-
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
-}
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 }
 
 function mondayISO() {
@@ -188,32 +176,7 @@ export function Journal() {
         ) : (
           <div className="grid gap-3">
             {notes.map((n) => (
-              <Card key={n.id} className="group py-4 shadow-none transition-shadow hover:shadow-md">
-                <CardContent className="px-5">
-                  <div className="mb-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-medium tabular-nums">{formatTime(n.created_at)}</span>
-                    {n.mood && (
-                      <span className="text-sm">
-                        {MOODS.find((m) => m.value === n.mood)?.emoji}
-                      </span>
-                    )}
-                    {n.tags.map((t) => (
-                      <Badge key={t} variant="secondary" className="rounded-full font-normal">
-                        {t}
-                      </Badge>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => remove(n.id)}
-                      className="ml-auto rounded-full px-1.5 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100"
-                      aria-label="Delete note"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{n.content}</p>
-                </CardContent>
-              </Card>
+              <NoteCard key={n.id} note={n} onDelete={remove} />
             ))}
           </div>
         )}
@@ -239,11 +202,7 @@ export function Journal() {
                       <span>
                         · {d.count} {d.count === 1 ? "note" : "notes"}
                       </span>
-                      {d.mood && (
-                        <span className="text-sm">
-                          {MOODS.find((m) => m.value === d.mood)?.emoji}
-                        </span>
-                      )}
+                      {d.mood && <span className="text-sm">{moodEmoji(d.mood)}</span>}
                     </div>
                     <p className="truncate text-sm text-foreground/85">{d.excerpt}</p>
                   </div>

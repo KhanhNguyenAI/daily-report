@@ -39,3 +39,14 @@ class Note(BaseModel):
     tags: list[str] = Field(default_factory=list)
     date: str
     created_at: datetime
+
+
+class Report(BaseModel):
+    id: str
+    type: str  # "daily" | "weekly"
+    language: str = "en"  # "en" | "ja" | "vi"
+    period_start: str
+    period_end: str
+    content: str  # markdown
+    insights: dict = Field(default_factory=dict)
+    created_at: datetime
