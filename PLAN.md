@@ -26,6 +26,7 @@ tổng hợp thành báo cáo chuyên nghiệp để gửi mentor/người khác
   1 user. NoSQL dạng document, rất hợp mô hình nhật ký. Dùng được từ local ngay ngày đầu
   nên không cần bước migrate DB khi deploy.
 - **AI**: Google Gemini API (`google-genai` SDK, model `gemini-3.5-flash` — free tier đủ dùng).
+  Model hay bị 503 lúc cao điểm → code nên có fallback sang `gemini-3.1-flash-lite` (đã test OK).
 - **Auth** (Giai đoạn 3): đăng nhập thường (password → JWT) + đăng nhập Google qua Firebase Auth
   (frontend lấy ID token, backend verify bằng firebase-admin).
 - **Repo**: https://github.com/KhanhNguyenAI/daily-report
@@ -119,6 +120,9 @@ Phân tích cảm xúc & khó khăn (chạy kèm, trả về JSON riêng): mood 
 các vấn đề lặp lại ≥2 lần, gợi ý cải thiện — hiển thị bằng chart ở trang Insights.
 
 ## 6. Giao diện (3 trang chính)
+
+Đã chốt qua mockup (2026-07-10): **UI bằng tiếng Anh**; khi tạo báo cáo được **chọn ngôn ngữ
+xuất báo cáo: English / 日本語 / Tiếng Việt** — tham số `language` (en/ja/vi) trong POST /reports/*.
 
 1. **Journal (hôm nay)**: editor viết note nhanh, chọn mood emoji, thêm tag, danh sách note trong ngày.
 2. **Timeline**: lịch/danh sách các ngày đã ghi, click xem lại.
