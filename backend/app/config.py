@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     google_credentials_json: str = ""  # production: dán nội dung JSON thay cho file
     gemini_api_key: str = ""
     cors_origins: str = "http://localhost:5173"
+    # Cho phép mọi domain Vercel của project (prod + preview) — auth token vẫn bắt buộc
+    cors_origin_regex: str = r"https://daily-report.*\.vercel\.app"
 
     # Auth: bật ở production để bắt đăng nhập Google. Local dev đặt AUTH_ENABLED=false.
     auth_enabled: bool = True
