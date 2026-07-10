@@ -2,12 +2,14 @@ from datetime import date as date_type
 from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from firebase_admin import firestore
 from pydantic import BaseModel, Field, field_validator
 
 from ..firebase import get_db
 from ..schemas import Report
 from ..services.ai_report import AIReportError, generate_report
+from ..services.docx_export import report_to_docx
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -100,6 +102,22 @@ def get_report(report_id: str):
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Report not found")
     return _to_report(doc)
+
+
+@router.get("/{report_id}/docx")
+def download_report_docx(report_id: str):
+    db = get_db()
+    doc = db.collection(COLLECTION).document(report_id).get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Report not found")
+    data = doc.to_dict()
+    content = report_to_docx(data)
+    filename = f"takenote-{data.get('type', 'report')}-{data.get('period_start', report_id)}-{data.get('language', '')}.docx"
+    return Response(
+        content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/{report_id}", status_code=204)

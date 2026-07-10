@@ -52,6 +52,28 @@ export function deleteReport(id: string) {
   return request<void>(`/reports/${id}`, { method: "DELETE" })
 }
 
+export async function downloadReportDocx(report: Report) {
+  const res = await fetch(`${API}/reports/${report.id}/docx`)
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `takenote-${report.type}-${report.period_start}-${report.language}.docx`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/** Bản text sạch để dán vào email/chat — bỏ hết ký tự markdown. */
+export function markdownToPlain(md: string): string {
+  return md
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "• ")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .trim()
+}
+
 export function savedLanguage(): ReportLanguage {
   return (localStorage.getItem("reportLanguage") as ReportLanguage) ?? "ja"
 }

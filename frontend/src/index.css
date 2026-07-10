@@ -117,6 +117,49 @@
     --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Báo cáo render từ markdown — sạch, không ký tự thô */
+.report-body {
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+.report-body h1, .report-body h2, .report-body h3, .report-body h4 {
+  font-size: 0.92rem;
+  font-weight: 650;
+  margin: 1em 0 0.35em;
+}
+.report-body > *:first-child { margin-top: 0; }
+.report-body p { margin: 0.35em 0; }
+.report-body ul, .report-body ol { margin: 0.35em 0; padding-left: 1.35em; }
+.report-body ul { list-style: disc; }
+.report-body ol { list-style: decimal; }
+.report-body li { margin: 0.2em 0; }
+.report-body strong { font-weight: 600; }
+
+/* Trang in (PDF): chỉ hiện báo cáo, dàn trang tài liệu */
+#print-report { display: none; }
+@media print {
+  #root { display: none !important; }
+  #print-report {
+    display: block;
+    max-width: 42rem;
+    margin: 0 auto;
+    color: #111;
+    font-family: "Geist", "Segoe UI", "Yu Gothic", system-ui, sans-serif;
+  }
+  #print-report header {
+    border-bottom: 2px solid #111;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+  #print-report header h1 { font-size: 1.4rem; margin: 0; }
+  #print-report header p { margin: 0.2rem 0 0; color: #555; font-size: 0.85rem; }
+  #print-report .report-body { font-size: 11pt; }
+  #print-report .report-body h1, #print-report .report-body h2, #print-report .report-body h3 {
+    font-size: 12pt;
+    margin-top: 1.2em;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

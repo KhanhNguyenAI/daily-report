@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 
 import { listNotes, type Note } from "@/api/notes"
@@ -6,7 +8,9 @@ import {
   createDailyReport,
   createWeeklyReport,
   deleteReport,
+  downloadReportDocx,
   listReports,
+  markdownToPlain,
   savedLanguage,
   type Report,
   type ReportLanguage,
@@ -27,6 +31,16 @@ function iso(d: Date) {
     d.getDate(),
   ).padStart(2, "0")}`
 }
+
+function ReportBody({ content }: { content: string }) {
+  return (
+    <div className="report-body">
+      <ReactMarkdown>{content}</ReactMarkdown>
+    </div>
+  )
+}
+
+const REPORT_TITLES = { daily: "Daily Report", weekly: "Weekly Report" }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -129,6 +143,12 @@ export function Reports() {
   const [language, setLanguage] = useState<ReportLanguage>(savedLanguage)
   const [selected, setSelected] = useState<Report | null>(null)
   const [generating, setGenerating] = useState<"daily" | "weekly" | null>(null)
+  const [printing, setPrinting] = useState<Report | null>(null)
+
+  function printReport(r: Report) {
+    setPrinting(r)
+    setTimeout(() => window.print(), 150)
+  }
 
   const refresh = useCallback(async () => {
     const end = new Date()
@@ -295,24 +315,53 @@ export function Reports() {
                     </div>
                     {selected?.id === r.id ? (
                       <div>
-                        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                          {r.content}
-                        </pre>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="mt-3 rounded-full"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            navigator.clipboard.writeText(r.content)
-                            toast.success("Copied to clipboard")
-                          }}
-                        >
-                          📋 Copy
-                        </Button>
+                        <ReportBody content={r.content} />
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              navigator.clipboard.writeText(markdownToPlain(r.content))
+                              toast.success("Copied as plain text")
+                            }}
+                          >
+                            📋 Copy
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full"
+                            onClick={async (e) => {
+                              e.stopPropagation()
+                              try {
+                                await downloadReportDocx(r)
+                                toast.success("Word file downloaded")
+                              } catch {
+                                toast.error("Download failed")
+                              }
+                            }}
+                          >
+                            📄 Word
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              printReport(r)
+                            }}
+                          >
+                            🖨 PDF / Print
+                          </Button>
+                        </div>
                       </div>
                     ) : (
-                      <p className="truncate text-sm text-muted-foreground">{r.content}</p>
+                      <p className="truncate text-sm text-muted-foreground">
+                        {markdownToPlain(r.content).split("\n")[0]}
+                      </p>
                     )}
                   </CardContent>
                 </Card>
@@ -356,6 +405,23 @@ export function Reports() {
           </CardContent>
         </Card>
       </div>
+
+      {printing &&
+        createPortal(
+          <div id="print-report">
+            <header>
+              <h1>{REPORT_TITLES[printing.type]}</h1>
+              <p>
+                {printing.period_start}
+                {printing.period_end !== printing.period_start && ` – ${printing.period_end}`}
+              </p>
+            </header>
+            <div className="report-body">
+              <ReactMarkdown>{printing.content}</ReactMarkdown>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
