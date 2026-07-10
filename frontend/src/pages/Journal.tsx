@@ -9,15 +9,21 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
+function localISO(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`
+}
+
 function todayISO() {
-  return new Date().toISOString().slice(0, 10)
+  return localISO(new Date())
 }
 
 function mondayISO() {
   const d = new Date()
   const day = d.getDay() || 7 // CN = 7
   d.setDate(d.getDate() - day + 1)
-  return d.toISOString().slice(0, 10)
+  return localISO(d)
 }
 
 function dayLabel(iso: string) {
@@ -92,6 +98,7 @@ export function Journal({ onReportCreated }: { onReportCreated?: () => void }) {
         content: content.trim(),
         mood,
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+        date: todayISO(),
       })
       setContent("")
       setMood(null)
