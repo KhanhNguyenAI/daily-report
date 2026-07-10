@@ -24,8 +24,53 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 }
 
+function mondayISO() {
+  const d = new Date()
+  const day = d.getDay() || 7 // CN = 7
+  d.setDate(d.getDate() - day + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+function dayLabel(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
+    weekday: "long",
+    day: "2-digit",
+    month: "short",
+  })
+}
+
+interface DaySummary {
+  date: string
+  count: number
+  mood: number | null
+  excerpt: string
+}
+
+function summarizeWeek(notes: Note[], today: string): DaySummary[] {
+  const byDay = new Map<string, Note[]>()
+  for (const n of notes) {
+    if (n.date === today) continue
+    byDay.set(n.date, [...(byDay.get(n.date) ?? []), n])
+  }
+  return [...byDay.entries()]
+    .sort(([a], [b]) => (a < b ? 1 : -1))
+    .map(([date, dayNotes]) => {
+      const moods = dayNotes.filter((n) => n.mood != null).map((n) => n.mood as number)
+      const latest = dayNotes.reduce((a, b) => (a.created_at > b.created_at ? a : b))
+      return {
+        date,
+        count: dayNotes.length,
+        mood: moods.length
+          ? Math.round(moods.reduce((s, m) => s + m, 0) / moods.length)
+          : null,
+        excerpt: latest.content.length > 60 ? `${latest.content.slice(0, 60)}…` : latest.content,
+      }
+    })
+}
+
 export function Journal() {
   const [notes, setNotes] = useState<Note[]>([])
+  const [week, setWeek] = useState<DaySummary[]>([])
   const [content, setContent] = useState("")
   const [mood, setMood] = useState<number | null>(null)
   const [tags, setTags] = useState("")
@@ -33,7 +78,13 @@ export function Journal() {
 
   const refresh = useCallback(async () => {
     try {
-      setNotes(await listNotes({ date: todayISO() }))
+      const today = todayISO()
+      const [todayNotes, weekNotes] = await Promise.all([
+        listNotes({ date: today }),
+        listNotes({ start: mondayISO(), end: today }),
+      ])
+      setNotes(todayNotes)
+      setWeek(summarizeWeek(weekNotes, today))
     } catch {
       toast.error("Could not load notes. Is the backend running?")
     }
@@ -75,7 +126,8 @@ export function Journal() {
   }
 
   return (
-    <div className="grid gap-5">
+    <div className="grid items-start gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-5">
       <Card className="shadow-sm">
         <CardContent className="grid gap-4 pt-6">
           <Textarea
@@ -165,6 +217,61 @@ export function Journal() {
             ))}
           </div>
         )}
+      </div>
+      </div>
+
+      <div className="grid gap-5">
+        <Card className="shadow-none">
+          <CardContent>
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              This week
+            </h2>
+            {week.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nothing earlier this week — today is where it starts 🌱
+              </p>
+            ) : (
+              <div className="grid gap-2.5">
+                {week.map((d) => (
+                  <div key={d.date} className="rounded-xl border bg-background/40 p-3">
+                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="font-medium">{dayLabel(d.date)}</span>
+                      <span>
+                        · {d.count} {d.count === 1 ? "note" : "notes"}
+                      </span>
+                      {d.mood && (
+                        <span className="text-sm">
+                          {MOODS.find((m) => m.value === d.mood)?.emoji}
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate text-sm text-foreground/85">{d.excerpt}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-none">
+          <CardContent>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              End of day
+            </h2>
+            <p className="mb-4 text-sm text-muted-foreground">
+              {notes.length === 0
+                ? "Write a few notes first, then turn them into a report."
+                : `You have ${notes.length} ${notes.length === 1 ? "note" : "notes"} today. Turn them into a polished report for your mentor?`}
+            </p>
+            <Button
+              className="rounded-full shadow-sm"
+              disabled={notes.length === 0}
+              onClick={() => toast.info("AI reports are coming in Phase 2 ✨")}
+            >
+              ✨ Create daily report
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

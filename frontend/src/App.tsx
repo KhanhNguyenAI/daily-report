@@ -43,7 +43,7 @@ export default function App() {
   })
 
   return (
-    <div className="mx-auto min-h-screen max-w-3xl px-4 py-8">
+    <div className="mx-auto min-h-screen max-w-5xl px-4 py-8">
       <header className="mb-8 flex items-center gap-3">
         <div className="grid size-9 place-items-center rounded-xl bg-primary text-base font-bold text-primary-foreground shadow-sm">
           T
