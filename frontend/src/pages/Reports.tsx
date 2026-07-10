@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { listNotes, type Note } from "@/api/notes"
-import { listReports, type Report, type ReportLanguage } from "@/api/reports"
+import {
+  createDailyReport,
+  createWeeklyReport,
+  deleteReport,
+  listReports,
+  savedLanguage,
+  type Report,
+  type ReportLanguage,
+} from "@/api/reports"
 import { moodEmoji } from "@/components/note-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -118,10 +126,9 @@ function MoodChart({ points }: { points: DayMood[] }) {
 export function Reports() {
   const [reports, setReports] = useState<Report[]>([])
   const [notes, setNotes] = useState<Note[]>([])
-  const [language, setLanguage] = useState<ReportLanguage>(
-    () => (localStorage.getItem("reportLanguage") as ReportLanguage) ?? "en",
-  )
+  const [language, setLanguage] = useState<ReportLanguage>(savedLanguage)
   const [selected, setSelected] = useState<Report | null>(null)
+  const [generating, setGenerating] = useState<"daily" | "weekly" | null>(null)
 
   const refresh = useCallback(async () => {
     const end = new Date()
@@ -147,6 +154,33 @@ export function Reports() {
   function pickLanguage(l: ReportLanguage) {
     setLanguage(l)
     localStorage.setItem("reportLanguage", l)
+  }
+
+  async function generate(kind: "daily" | "weekly") {
+    setGenerating(kind)
+    try {
+      const report = await (kind === "daily"
+        ? createDailyReport(language)
+        : createWeeklyReport(language))
+      toast.success(`${kind === "daily" ? "Daily" : "Weekly"} report created ✨`)
+      setSelected(report)
+      setReports((cur) => [report, ...cur])
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate report")
+    } finally {
+      setGenerating(null)
+    }
+  }
+
+  async function removeReport(id: string) {
+    try {
+      await deleteReport(id)
+      toast.success("Report deleted")
+      setReports((cur) => cur.filter((r) => r.id !== id))
+      setSelected((cur) => (cur?.id === id ? null : cur))
+    } catch {
+      toast.error("Failed to delete report")
+    }
   }
 
   const moodPoints = useMemo<DayMood[]>(() => {
@@ -199,16 +233,18 @@ export function Reports() {
             <div className="flex flex-wrap gap-2">
               <Button
                 className="rounded-full shadow-sm"
-                onClick={() => toast.info("AI daily reports arrive in Phase 2 ✨")}
+                disabled={generating !== null}
+                onClick={() => generate("daily")}
               >
-                ✨ Daily report
+                {generating === "daily" ? "Writing report…" : "✨ Daily report"}
               </Button>
               <Button
                 variant="outline"
                 className="rounded-full"
-                onClick={() => toast.info("AI weekly reports arrive in Phase 2 ✨")}
+                disabled={generating !== null}
+                onClick={() => generate("weekly")}
               >
-                🗓 Weekly report
+                {generating === "weekly" ? "Writing report…" : "🗓 Weekly report"}
               </Button>
             </div>
           </CardContent>
@@ -245,11 +281,36 @@ export function Reports() {
                         {r.period_end !== r.period_start && ` → ${r.period_end}`}
                       </span>
                       <span className="ml-auto uppercase">{r.language}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removeReport(r.id)
+                        }}
+                        className="rounded-full px-1.5 text-muted-foreground transition hover:text-destructive"
+                        aria-label="Delete report"
+                      >
+                        ✕
+                      </button>
                     </div>
                     {selected?.id === r.id ? (
-                      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                        {r.content}
-                      </pre>
+                      <div>
+                        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                          {r.content}
+                        </pre>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 rounded-full"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigator.clipboard.writeText(r.content)
+                            toast.success("Copied to clipboard")
+                          }}
+                        >
+                          📋 Copy
+                        </Button>
+                      </div>
                     ) : (
                       <p className="truncate text-sm text-muted-foreground">{r.content}</p>
                     )}

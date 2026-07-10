@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { createNote, deleteNote, listNotes, type Note } from "@/api/notes"
+import { createDailyReport, savedLanguage } from "@/api/reports"
 import { MOODS, moodEmoji, NoteCard } from "@/components/note-card"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -56,7 +57,8 @@ function summarizeWeek(notes: Note[], today: string): DaySummary[] {
     })
 }
 
-export function Journal() {
+export function Journal({ onReportCreated }: { onReportCreated?: () => void }) {
+  const [reporting, setReporting] = useState(false)
   const [notes, setNotes] = useState<Note[]>([])
   const [week, setWeek] = useState<DaySummary[]>([])
   const [content, setContent] = useState("")
@@ -224,10 +226,21 @@ export function Journal() {
             </p>
             <Button
               className="rounded-full shadow-sm"
-              disabled={notes.length === 0}
-              onClick={() => toast.info("AI reports are coming in Phase 2 ✨")}
+              disabled={notes.length === 0 || reporting}
+              onClick={async () => {
+                setReporting(true)
+                try {
+                  await createDailyReport(savedLanguage())
+                  toast.success("Daily report created ✨")
+                  onReportCreated?.()
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Failed to create report")
+                } finally {
+                  setReporting(false)
+                }
+              }}
             >
-              ✨ Create daily report
+              {reporting ? "Writing report…" : "✨ Create daily report"}
             </Button>
           </CardContent>
         </Card>

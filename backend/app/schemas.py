@@ -44,7 +44,7 @@ class Note(BaseModel):
 class Report(BaseModel):
     id: str
     type: str  # "daily" | "weekly"
-    language: str = "en"  # "en" | "ja" | "vi"
+    language: str = "ja"  # "en" | "ja" | "vi"
     period_start: str
     period_end: str
     content: str  # markdown

@@ -13,8 +13,45 @@ export interface Report {
   created_at: string
 }
 
-export async function listReports(): Promise<Report[]> {
-  const res = await fetch(`${API}/reports`)
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-  return res.json()
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  })
+  if (!res.ok) {
+    let detail = ""
+    try {
+      detail = (await res.json()).detail ?? ""
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail || `${res.status} ${res.statusText}`)
+  }
+  return res.status === 204 ? (undefined as T) : res.json()
+}
+
+export function listReports() {
+  return request<Report[]>("/reports")
+}
+
+export function createDailyReport(language: ReportLanguage, date?: string) {
+  return request<Report>("/reports/daily", {
+    method: "POST",
+    body: JSON.stringify({ language, date }),
+  })
+}
+
+export function createWeeklyReport(language: ReportLanguage, date?: string) {
+  return request<Report>("/reports/weekly", {
+    method: "POST",
+    body: JSON.stringify({ language, date }),
+  })
+}
+
+export function deleteReport(id: string) {
+  return request<void>(`/reports/${id}`, { method: "DELETE" })
+}
+
+export function savedLanguage(): ReportLanguage {
+  return (localStorage.getItem("reportLanguage") as ReportLanguage) ?? "ja"
 }

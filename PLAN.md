@@ -135,8 +135,9 @@ xuất báo cáo: English / 日本語 / Tiếng Việt** — tham số `language
   Tạo project Firebase + service account; Backend FastAPI kết nối Firestore + CRUD notes
   + endpoint `/export`; Frontend trang Journal + nút Export backup.
   → Tuần tới đi intern là ghi note được ngay, dữ liệu ở cloud và backup được về máy.
-- **Giai đoạn 2 — AI báo cáo (~1-2 buổi)**
-  Tích hợp Gemini, báo cáo ngày trước, rồi báo cáo tuần. Tinh chỉnh prompt bằng note thật.
+- **Giai đoạn 2 — AI báo cáo (~1-2 buổi)** ✅ XONG 2026-07-10
+  Tích hợp Gemini, báo cáo ngày + tuần, 3 ngôn ngữ (mặc định ja), insights JSON,
+  fallback model khi 503. Tinh chỉnh prompt thêm bằng note thật khi đi intern.
 - **Giai đoạn 3 — Deploy online**
   Thêm auth JWT, deploy Render/Koyeb + Vercel (DB đã trên Firebase sẵn, không cần migrate),
   cấu hình UptimeRobot ping backend nếu dùng Render.

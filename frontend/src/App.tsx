@@ -12,6 +12,7 @@ import { Timeline } from "@/pages/Timeline"
 
 export default function App() {
   const [exporting, setExporting] = useState(false)
+  const [tab, setTab] = useState("today")
 
   async function handleExport() {
     setExporting(true)
@@ -55,7 +56,7 @@ export default function App() {
         <ThemeToggle />
       </header>
 
-      <Tabs defaultValue="today">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-5 rounded-full p-1">
           <TabsTrigger value="today" className="rounded-full px-4">
             ✏️ Today
@@ -68,7 +69,7 @@ export default function App() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="today">
-          <Journal />
+          <Journal onReportCreated={() => setTab("reports")} />
         </TabsContent>
         <TabsContent value="timeline">
           <Timeline />
