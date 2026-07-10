@@ -1,0 +1,23 @@
+# Render Blueprint cho backend TakeNote.
+# Deploy: Render Dashboard → New → Blueprint → chọn repo này.
+# Các secret (GEMINI_API_KEY, GOOGLE_CREDENTIALS_JSON) tự điền trong dashboard.
+services:
+  - type: web
+    name: takenote-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.4"
+      - key: AUTH_ENABLED
+        value: "true"
+      - key: CORS_ORIGINS
+        sync: false # dán URL Vercel, vd https://takenote.vercel.app
+      - key: GEMINI_API_KEY
+        sync: false # dán từ .env
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false # dán TOÀN BỘ nội dung serviceAccountKey.json (1 dòng)

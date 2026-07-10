@@ -1,3 +1,5 @@
+import { authHeader } from "@/lib/auth"
+
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:8000"
 
 export type ReportLanguage = "en" | "ja" | "vi"
@@ -15,8 +17,8 @@ export interface Report {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers: { "Content-Type": "application/json", ...(await authHeader()), ...init?.headers },
   })
   if (!res.ok) {
     let detail = ""
@@ -53,7 +55,7 @@ export function deleteReport(id: string) {
 }
 
 export async function downloadReportDocx(report: Report) {
-  const res = await fetch(`${API}/reports/${report.id}/docx`)
+  const res = await fetch(`${API}/reports/${report.id}/docx`, { headers: await authHeader() })
   if (!res.ok) throw new Error(`Download failed: ${res.status}`)
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)

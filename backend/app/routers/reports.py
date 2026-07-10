@@ -1,11 +1,12 @@
 from datetime import date as date_type
 from datetime import timedelta
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from firebase_admin import firestore
 from pydantic import BaseModel, Field, field_validator
 
+from ..auth import require_user
 from ..firebase import get_db
 from ..schemas import Report
 from ..services.ai_report import AIReportError, generate_report
@@ -17,7 +18,17 @@ COLLECTION = "reports"
 
 
 def _to_report(doc) -> Report:
-    return Report(id=doc.id, **doc.to_dict())
+    data = doc.to_dict()
+    data.pop("uid", None)
+    return Report(id=doc.id, **data)
+
+
+def _owned_report(db, report_id: str, uid: str):
+    ref = db.collection(COLLECTION).document(report_id)
+    snap = ref.get()
+    if not snap.exists or snap.to_dict().get("uid") != uid:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return snap
 
 
 class GenerateRequest(BaseModel):
@@ -39,18 +50,19 @@ class GenerateRequest(BaseModel):
         return v
 
 
-def _fetch_notes(start: str, end: str) -> list[dict]:
+def _fetch_notes(uid: str, start: str, end: str) -> list[dict]:
     db = get_db()
-    query = (
-        db.collection("notes")
-        .where(filter=firestore.firestore.FieldFilter("date", ">=", start))
-        .where(filter=firestore.firestore.FieldFilter("date", "<=", end))
+    query = db.collection("notes").where(
+        filter=firestore.firestore.FieldFilter("uid", "==", uid)
     )
-    return [doc.to_dict() for doc in query.stream()]
+    return [
+        n for n in (doc.to_dict() for doc in query.stream())
+        if start <= n.get("date", "") <= end
+    ]
 
 
-def _create(kind: str, start: str, end: str, language: str) -> Report:
-    notes = _fetch_notes(start, end)
+def _create(uid: str, kind: str, start: str, end: str, language: str) -> Report:
+    notes = _fetch_notes(uid, start, end)
     if not notes:
         raise HTTPException(status_code=400, detail="No notes in this period to report on")
     try:
@@ -61,6 +73,7 @@ def _create(kind: str, start: str, end: str, language: str) -> Report:
     ref = db.collection(COLLECTION).document()
     ref.set(
         {
+            "uid": uid,
             "type": kind,
             "language": language,
             "period_start": start,
@@ -74,43 +87,40 @@ def _create(kind: str, start: str, end: str, language: str) -> Report:
 
 
 @router.post("/daily", response_model=Report, status_code=201)
-def create_daily_report(payload: GenerateRequest):
+def create_daily_report(payload: GenerateRequest, user: dict = Depends(require_user)):
     day = payload.date or date_type.today().isoformat()
-    return _create("daily", day, day, payload.language)
+    return _create(user["uid"], "daily", day, day, payload.language)
 
 
 @router.post("/weekly", response_model=Report, status_code=201)
-def create_weekly_report(payload: GenerateRequest):
+def create_weekly_report(payload: GenerateRequest, user: dict = Depends(require_user)):
     anchor = date_type.fromisoformat(payload.date) if payload.date else date_type.today()
     monday = anchor - timedelta(days=anchor.weekday())
     end = min(monday + timedelta(days=6), date_type.today())
-    return _create("weekly", monday.isoformat(), end.isoformat(), payload.language)
+    return _create(user["uid"], "weekly", monday.isoformat(), end.isoformat(), payload.language)
 
 
 @router.get("", response_model=list[Report])
-def list_reports():
+def list_reports(user: dict = Depends(require_user)):
     db = get_db()
-    reports = [_to_report(d) for d in db.collection(COLLECTION).stream()]
+    query = db.collection(COLLECTION).where(
+        filter=firestore.firestore.FieldFilter("uid", "==", user["uid"])
+    )
+    reports = [_to_report(d) for d in query.stream()]
     reports.sort(key=lambda r: r.created_at, reverse=True)
     return reports
 
 
 @router.get("/{report_id}", response_model=Report)
-def get_report(report_id: str):
+def get_report(report_id: str, user: dict = Depends(require_user)):
     db = get_db()
-    doc = db.collection(COLLECTION).document(report_id).get()
-    if not doc.exists:
-        raise HTTPException(status_code=404, detail="Report not found")
-    return _to_report(doc)
+    return _to_report(_owned_report(db, report_id, user["uid"]))
 
 
 @router.get("/{report_id}/docx")
-def download_report_docx(report_id: str):
+def download_report_docx(report_id: str, user: dict = Depends(require_user)):
     db = get_db()
-    doc = db.collection(COLLECTION).document(report_id).get()
-    if not doc.exists:
-        raise HTTPException(status_code=404, detail="Report not found")
-    data = doc.to_dict()
+    data = _owned_report(db, report_id, user["uid"]).to_dict()
     content = report_to_docx(data)
     filename = f"takenote-{data.get('type', 'report')}-{data.get('period_start', report_id)}-{data.get('language', '')}.docx"
     return Response(
@@ -121,9 +131,7 @@ def download_report_docx(report_id: str):
 
 
 @router.delete("/{report_id}", status_code=204)
-def delete_report(report_id: str):
+def delete_report(report_id: str, user: dict = Depends(require_user)):
     db = get_db()
-    ref = db.collection(COLLECTION).document(report_id)
-    if not ref.get().exists:
-        raise HTTPException(status_code=404, detail="Report not found")
-    ref.delete()
+    _owned_report(db, report_id, user["uid"])
+    db.collection(COLLECTION).document(report_id).delete()

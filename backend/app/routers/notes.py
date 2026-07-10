@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from firebase_admin import firestore
 
+from ..auth import require_user
 from ..firebase import get_db
 from ..schemas import Note, NoteCreate, NoteUpdate
 
@@ -11,13 +12,24 @@ COLLECTION = "notes"
 
 def _to_note(doc) -> Note:
     data = doc.to_dict()
+    data.pop("uid", None)
     return Note(id=doc.id, **data)
 
 
+def _owned(db, note_id: str, uid: str):
+    """Lấy document note nếu thuộc về user, ngược lại 404 (không lộ note người khác)."""
+    ref = db.collection(COLLECTION).document(note_id)
+    snap = ref.get()
+    if not snap.exists or snap.to_dict().get("uid") != uid:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return ref
+
+
 @router.post("", response_model=Note, status_code=201)
-def create_note(payload: NoteCreate):
+def create_note(payload: NoteCreate, user: dict = Depends(require_user)):
     db = get_db()
     data = payload.model_dump()
+    data["uid"] = user["uid"]
     data["created_at"] = firestore.SERVER_TIMESTAMP
     ref = db.collection(COLLECTION).document()
     ref.set(data)
@@ -26,31 +38,32 @@ def create_note(payload: NoteCreate):
 
 @router.get("", response_model=list[Note])
 def list_notes(
+    user: dict = Depends(require_user),
     date: str | None = Query(default=None, description="YYYY-MM-DD"),
     start: str | None = Query(default=None, description="YYYY-MM-DD"),
     end: str | None = Query(default=None, description="YYYY-MM-DD"),
 ):
     db = get_db()
-    query = db.collection(COLLECTION)
+    # Lọc theo user ở Firestore (equality), lọc ngày trong Python để khỏi cần composite index
+    query = db.collection(COLLECTION).where(
+        filter=firestore.firestore.FieldFilter("uid", "==", user["uid"])
+    )
+    notes = [_to_note(doc) for doc in query.stream()]
     if date:
-        query = query.where(filter=firestore.firestore.FieldFilter("date", "==", date))
+        notes = [n for n in notes if n.date == date]
     else:
         if start:
-            query = query.where(filter=firestore.firestore.FieldFilter("date", ">=", start))
+            notes = [n for n in notes if n.date >= start]
         if end:
-            query = query.where(filter=firestore.firestore.FieldFilter("date", "<=", end))
-    notes = [_to_note(doc) for doc in query.stream()]
-    # Sắp xếp trong Python để không cần composite index của Firestore
+            notes = [n for n in notes if n.date <= end]
     notes.sort(key=lambda n: (n.date, n.created_at), reverse=True)
     return notes
 
 
 @router.put("/{note_id}", response_model=Note)
-def update_note(note_id: str, payload: NoteUpdate):
+def update_note(note_id: str, payload: NoteUpdate, user: dict = Depends(require_user)):
     db = get_db()
-    ref = db.collection(COLLECTION).document(note_id)
-    if not ref.get().exists:
-        raise HTTPException(status_code=404, detail="Note not found")
+    ref = _owned(db, note_id, user["uid"])
     changes = payload.model_dump(exclude_unset=True)
     if changes:
         ref.update(changes)
@@ -58,9 +71,7 @@ def update_note(note_id: str, payload: NoteUpdate):
 
 
 @router.delete("/{note_id}", status_code=204)
-def delete_note(note_id: str):
+def delete_note(note_id: str, user: dict = Depends(require_user)):
     db = get_db()
-    ref = db.collection(COLLECTION).document(note_id)
-    if not ref.get().exists:
-        raise HTTPException(status_code=404, detail="Note not found")
+    ref = _owned(db, note_id, user["uid"])
     ref.delete()

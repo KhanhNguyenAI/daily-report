@@ -6,13 +6,28 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useAuth } from "@/lib/auth"
 import { Journal } from "@/pages/Journal"
+import { Login } from "@/pages/Login"
 import { Reports } from "@/pages/Reports"
 import { Timeline } from "@/pages/Timeline"
 
 export default function App() {
+  const { user, loading, enabled, logout } = useAuth()
   const [exporting, setExporting] = useState(false)
   const [tab, setTab] = useState("today")
+
+  if (enabled && loading) {
+    return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Loading…</div>
+  }
+  if (enabled && !user) {
+    return (
+      <>
+        <Login />
+        <Toaster />
+      </>
+    )
+  }
 
   async function handleExport() {
     setExporting(true)
@@ -54,6 +69,17 @@ export default function App() {
           {exporting ? "Exporting…" : "⬇ Export backup"}
         </Button>
         <ThemeToggle />
+        {enabled && user && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="rounded-full"
+            onClick={logout}
+            title={user.email ?? undefined}
+          >
+            Sign out
+          </Button>
+        )}
       </header>
 
       <Tabs value={tab} onValueChange={setTab}>

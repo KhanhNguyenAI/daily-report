@@ -4,9 +4,11 @@ import zipfile
 from collections import defaultdict
 from datetime import date
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from firebase_admin import firestore
 
+from ..auth import require_user
 from ..firebase import get_db
 
 router = APIRouter(tags=["export"])
@@ -16,6 +18,7 @@ MOOD_LABELS = {1: "😫 1/5", 2: "🙁 2/5", 3: "😐 3/5", 4: "🙂 4/5", 5: "�
 
 def _serialize(doc) -> dict:
     data = doc.to_dict()
+    data.pop("uid", None)
     data["id"] = doc.id
     if "created_at" in data and data["created_at"] is not None:
         data["created_at"] = data["created_at"].isoformat()
@@ -37,10 +40,15 @@ def _day_markdown(day: str, notes: list[dict]) -> str:
 
 
 @router.get("/export")
-def export_backup():
+def export_backup(user: dict = Depends(require_user)):
     db = get_db()
-    notes = [_serialize(d) for d in db.collection("notes").stream()]
-    reports = [_serialize(d) for d in db.collection("reports").stream()]
+    uid_filter = firestore.firestore.FieldFilter("uid", "==", user["uid"])
+    notes = [
+        _serialize(d) for d in db.collection("notes").where(filter=uid_filter).stream()
+    ]
+    reports = [
+        _serialize(d) for d in db.collection("reports").where(filter=uid_filter).stream()
+    ]
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:

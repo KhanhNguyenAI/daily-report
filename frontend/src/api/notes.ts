@@ -1,3 +1,5 @@
+import { authHeader } from "@/lib/auth"
+
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:8000"
 
 export interface Note {
@@ -18,8 +20,8 @@ export interface NoteInput {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers: { "Content-Type": "application/json", ...(await authHeader()), ...init?.headers },
   })
   if (!res.ok) {
     const detail = await res.text().catch(() => "")
@@ -48,7 +50,7 @@ export function deleteNote(id: string) {
 }
 
 export async function downloadBackup() {
-  const res = await fetch(`${API}/export`)
+  const res = await fetch(`${API}/export`, { headers: await authHeader() })
   if (!res.ok) throw new Error(`Export failed: ${res.status}`)
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
