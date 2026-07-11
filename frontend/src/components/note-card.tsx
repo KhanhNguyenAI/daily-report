@@ -47,6 +47,7 @@ export function NoteCard({ note, onDelete, onUpdate, collapsed, onToggleCollapse
   const [tags, setTags] = useState(note.tags.join(", "))
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmSave, setConfirmSave] = useState(false)
 
   function startEdit() {
     setContent(note.content)
@@ -118,7 +119,7 @@ export function NoteCard({ note, onDelete, onUpdate, collapsed, onToggleCollapse
               <Button
                 size="sm"
                 className="rounded-full"
-                onClick={save}
+                onClick={() => setConfirmSave(true)}
                 disabled={saving || !content.trim()}
               >
                 {saving ? "Saving…" : "Save"}
@@ -126,6 +127,27 @@ export function NoteCard({ note, onDelete, onUpdate, collapsed, onToggleCollapse
             </div>
           </div>
         </CardContent>
+        <Dialog open={confirmSave} onOpenChange={setConfirmSave}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Save these changes?</DialogTitle>
+              <DialogDescription>The note's content will be updated.</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmSave(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setConfirmSave(false)
+                  save()
+                }}
+              >
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </Card>
     )
   }
