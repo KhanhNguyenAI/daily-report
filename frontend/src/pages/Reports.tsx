@@ -5,12 +5,13 @@ import { toast } from "sonner"
 
 import { listNotes, type Note } from "@/api/notes"
 import {
-  createDailyReport,
   createWeeklyReport,
   deleteReport,
   downloadReportDocx,
   listReports,
   markdownToPlain,
+  savedInstructions,
+  saveInstructions,
   savedLanguage,
   type Report,
   type ReportLanguage,
@@ -19,6 +20,7 @@ import { moodEmoji } from "@/components/note-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
 
 const LANGUAGES: { value: ReportLanguage; label: string }[] = [
   { value: "en", label: "English" },
@@ -40,7 +42,7 @@ function ReportBody({ content }: { content: string }) {
   )
 }
 
-const REPORT_TITLES = { daily: "Daily Report", weekly: "Weekly Report" }
+const REPORT_TITLES = { daily: "Daily Report", weekly: "Weekly Report", custom: "Work Report" }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -141,8 +143,10 @@ export function Reports() {
   const [reports, setReports] = useState<Report[]>([])
   const [notes, setNotes] = useState<Note[]>([])
   const [language, setLanguage] = useState<ReportLanguage>(savedLanguage)
-  const [selected, setSelected] = useState<Report | null>(null)
-  const [generating, setGenerating] = useState<"daily" | "weekly" | null>(null)
+  const [instructions, setInstructions] = useState(savedInstructions)
+  // id các báo cáo đang mở — rỗng nghĩa là đóng hết, không ép ô nào phải mở
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const [generating, setGenerating] = useState(false)
   const [printing, setPrinting] = useState<Report | null>(null)
 
   function printReport(r: Report) {
@@ -160,7 +164,6 @@ export function Reports() {
         listNotes({ start: iso(start), end: iso(end) }),
       ])
       setReports(r)
-      setSelected((cur) => cur ?? r[0] ?? null)
       setNotes(n)
     } catch {
       toast.error("Could not load data. Is the backend running?")
@@ -176,19 +179,18 @@ export function Reports() {
     localStorage.setItem("reportLanguage", l)
   }
 
-  async function generate(kind: "daily" | "weekly") {
-    setGenerating(kind)
+  async function generateWeekly() {
+    setGenerating(true)
     try {
-      const report = await (kind === "daily"
-        ? createDailyReport(language)
-        : createWeeklyReport(language))
-      toast.success(`${kind === "daily" ? "Daily" : "Weekly"} report created ✨`)
-      setSelected(report)
+      saveInstructions(instructions)
+      const report = await createWeeklyReport(language, undefined, instructions.trim())
+      toast.success("Weekly report created ✨")
       setReports((cur) => [report, ...cur])
+      setOpen((cur) => new Set(cur).add(report.id))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to generate report")
     } finally {
-      setGenerating(null)
+      setGenerating(false)
     }
   }
 
@@ -197,10 +199,30 @@ export function Reports() {
       await deleteReport(id)
       toast.success("Report deleted")
       setReports((cur) => cur.filter((r) => r.id !== id))
-      setSelected((cur) => (cur?.id === id ? null : cur))
     } catch {
       toast.error("Failed to delete report")
     }
+  }
+
+  function toggleReport(id: string) {
+    setOpen((cur) => {
+      const next = new Set(cur)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll(list: Report[]) {
+    setOpen((cur) => {
+      const next = new Set(cur)
+      const anyOpen = list.some((r) => next.has(r.id))
+      for (const r of list) {
+        if (anyOpen) next.delete(r.id)
+        else next.add(r.id)
+      }
+      return next
+    })
   }
 
   const moodPoints = useMemo<DayMood[]>(() => {
@@ -217,6 +239,133 @@ export function Reports() {
       }))
   }, [notes])
 
+  function reportSection(title: string, list: Report[], emptyHint: string) {
+    const anyOpen = list.some((r) => open.has(r.id))
+    return (
+      <div>
+        <div className="mb-3 flex items-baseline gap-2 px-1">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            {title} · {list.length}
+          </h2>
+          {list.length > 0 && (
+            <button
+              type="button"
+              onClick={() => toggleAll(list)}
+              className="ml-auto rounded-full px-2 py-0.5 text-xs text-primary transition hover:bg-accent"
+            >
+              {anyOpen ? "▾ Collapse all" : "▸ Expand all"}
+            </button>
+          )}
+        </div>
+        {list.length === 0 ? (
+          <Card className="border-dashed shadow-none">
+            <CardContent className="py-8 text-center">
+              <p className="text-sm text-muted-foreground">{emptyHint}</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-3">
+            {list.map((r) => {
+              const isOpen = open.has(r.id)
+              return (
+                <Card key={r.id} className="overflow-hidden py-0 shadow-none">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onClick={() => toggleReport(r.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        toggleReport(r.id)
+                      }
+                    }}
+                    className="flex w-full cursor-pointer items-center gap-2 px-5 py-3.5 text-xs text-muted-foreground"
+                  >
+                    <span
+                      aria-hidden
+                      className={`text-[10px] text-primary transition-transform ${isOpen ? "rotate-90" : ""}`}
+                    >
+                      ▶
+                    </span>
+                    <Badge
+                      variant={
+                        r.type === "weekly" ? "outline" : r.type === "custom" ? "secondary" : "default"
+                      }
+                      className="rounded-full uppercase"
+                    >
+                      {r.type}
+                    </Badge>
+                    <span className="whitespace-nowrap">
+                      {r.period_start}
+                      {r.period_end !== r.period_start && ` → ${r.period_end}`}
+                    </span>
+                    {!isOpen && (
+                      <span className="truncate">{markdownToPlain(r.content).split("\n")[0]}</span>
+                    )}
+                    <span className="ml-auto uppercase">{r.language}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeReport(r.id)
+                      }}
+                      className="rounded-full px-1.5 text-muted-foreground transition hover:text-destructive"
+                      aria-label="Delete report"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {isOpen && (
+                    <CardContent className="px-5 pb-4">
+                      <ReportBody content={r.content} />
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full"
+                          onClick={() => {
+                            navigator.clipboard.writeText(markdownToPlain(r.content))
+                            toast.success("Copied as plain text")
+                          }}
+                        >
+                          📋 Copy
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full"
+                          onClick={async () => {
+                            try {
+                              await downloadReportDocx(r)
+                              toast.success("Word file downloaded")
+                            } catch {
+                              toast.error("Download failed")
+                            }
+                          }}
+                        >
+                          📄 Word
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full"
+                          onClick={() => printReport(r)}
+                        >
+                          🖨 PDF / Print
+                        </Button>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const topTags = useMemo(() => {
     const counts = new Map<string, number>()
     for (const n of notes) for (const t of n.tags) counts.set(t, (counts.get(t) ?? 0) + 1)
@@ -229,7 +378,7 @@ export function Reports() {
       <div className="grid gap-5">
         <Card className="shadow-none">
           <CardContent>
-            <SectionTitle>Generate a report</SectionTitle>
+            <SectionTitle>Generate weekly report</SectionTitle>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <span className="text-sm text-muted-foreground">Language:</span>
               <div className="flex gap-1" role="group" aria-label="Report language">
@@ -250,125 +399,45 @@ export function Reports() {
                 ))}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                className="rounded-full shadow-sm"
-                disabled={generating !== null}
-                onClick={() => generate("daily")}
-              >
-                {generating === "daily" ? "Writing report…" : "✨ Daily report"}
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-full"
-                disabled={generating !== null}
-                onClick={() => generate("weekly")}
-              >
-                {generating === "weekly" ? "Writing report…" : "🗓 Weekly report"}
-              </Button>
-            </div>
+            <Textarea
+              placeholder="Format request (optional) — e.g. follow the company template 業務内容／進捗／所感…"
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              maxLength={500}
+              className="mb-1 min-h-16 bg-muted/50 text-sm"
+              aria-label="Report format instructions"
+            />
+            <p className="mb-4 text-xs text-muted-foreground">
+              Shapes the presentation only — content still comes from your notes. Remembered for next time.
+            </p>
+            <Button
+              className="rounded-full shadow-sm"
+              disabled={generating}
+              onClick={generateWeekly}
+            >
+              {generating ? "Writing report…" : "🗓 Weekly report"}
+            </Button>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Daily reports are created per day in the Timeline tab.
+            </p>
           </CardContent>
         </Card>
 
-        <div>
-          <SectionTitle>
-            Past reports · {reports.length}
-          </SectionTitle>
-          {reports.length === 0 ? (
-            <Card className="border-dashed shadow-none">
-              <CardContent className="py-12 text-center">
-                <div className="mb-2 text-3xl">📄</div>
-                <p className="text-sm text-muted-foreground">
-                  No reports yet. Write some notes, then generate your first one.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-3">
-              {reports.map((r) => (
-                <Card
-                  key={r.id}
-                  className={`cursor-pointer py-4 shadow-none transition hover:shadow-md ${
-                    selected?.id === r.id ? "ring-2 ring-primary" : ""
-                  }`}
-                  onClick={() => setSelected(r)}
-                >
-                  <CardContent className="px-5">
-                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-                      <Badge className="rounded-full uppercase">{r.type}</Badge>
-                      <span>
-                        {r.period_start}
-                        {r.period_end !== r.period_start && ` → ${r.period_end}`}
-                      </span>
-                      <span className="ml-auto uppercase">{r.language}</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          removeReport(r.id)
-                        }}
-                        className="rounded-full px-1.5 text-muted-foreground transition hover:text-destructive"
-                        aria-label="Delete report"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    {selected?.id === r.id ? (
-                      <div>
-                        <ReportBody content={r.content} />
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-full"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              navigator.clipboard.writeText(markdownToPlain(r.content))
-                              toast.success("Copied as plain text")
-                            }}
-                          >
-                            📋 Copy
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-full"
-                            onClick={async (e) => {
-                              e.stopPropagation()
-                              try {
-                                await downloadReportDocx(r)
-                                toast.success("Word file downloaded")
-                              } catch {
-                                toast.error("Download failed")
-                              }
-                            }}
-                          >
-                            📄 Word
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-full"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              printReport(r)
-                            }}
-                          >
-                            🖨 PDF / Print
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="truncate text-sm text-muted-foreground">
-                        {markdownToPlain(r.content).split("\n")[0]}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+        {reportSection(
+          "Daily reports",
+          reports.filter((r) => r.type === "daily"),
+          "No daily reports yet. Create them per day in the Timeline tab.",
+        )}
+        {reportSection(
+          "Weekly reports",
+          reports.filter((r) => r.type === "weekly"),
+          "No weekly reports yet. Generate one above.",
+        )}
+        {reportSection(
+          "Custom reports",
+          reports.filter((r) => r.type === "custom"),
+          "No custom reports yet. Use ☑ Custom report on the Timeline calendar to pick days and notes.",
+        )}
       </div>
 
       <div className="grid gap-5">

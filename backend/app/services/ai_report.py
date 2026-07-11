@@ -34,6 +34,15 @@ WEEKLY_SECTIONS = """- Week summary (3-4 sentences)
 - Progress made this week
 - Goals for next week (only if mentioned in the notes)"""
 
+# Báo cáo custom: note do người dùng tự chọn, có thể rải rác nhiều ngày
+CUSTOM_SECTIONS = """- Summary of the selected period (2-4 sentences)
+- Work completed (bullet points, grouped logically)
+- Difficulties & how they were handled
+- Lessons learned / new knowledge"""
+
+SECTIONS = {"daily": DAILY_SECTIONS, "weekly": WEEKLY_SECTIONS, "custom": CUSTOM_SECTIONS}
+KIND_LABEL = {"daily": "daily", "weekly": "weekly", "custom": "work summary"}
+
 PROMPT_TEMPLATE = """You are an assistant helping a software engineering intern turn their personal diary notes into a professional {kind} report for their mentor.
 
 Step 1 — analyze silently. The notes are informal, possibly messy, emotional, and may mix languages. Separate: (a) work done, (b) results/progress, (c) difficulties encountered, (d) lessons learned, (e) emotions.
@@ -86,9 +95,9 @@ def generate_report(
             f"{instructions.strip()}"
         )
     prompt = PROMPT_TEMPLATE.format(
-        kind=kind,
+        kind=KIND_LABEL.get(kind, kind),
         language=LANGUAGES.get(language, LANGUAGES["ja"]),
-        sections=DAILY_SECTIONS if kind == "daily" else WEEKLY_SECTIONS,
+        sections=SECTIONS.get(kind, DAILY_SECTIONS),
         notes=_format_notes(notes),
         instructions=extra,
     )

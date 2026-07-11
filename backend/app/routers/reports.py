@@ -51,6 +51,19 @@ class GenerateRequest(BaseModel):
         return v
 
 
+class CustomRequest(BaseModel):
+    note_ids: list[str] = Field(min_length=1, max_length=200)
+    language: str = Field(default="ja")
+    instructions: str | None = Field(default=None, max_length=500)
+
+    @field_validator("language")
+    @classmethod
+    def valid_language(cls, v: str) -> str:
+        if v not in {"en", "ja", "vi"}:
+            raise ValueError("language must be one of: en, ja, vi")
+        return v
+
+
 def _fetch_notes(uid: str, start: str, end: str) -> list[dict]:
     db = get_db()
     query = db.collection("notes").where(
@@ -103,6 +116,38 @@ def create_weekly_report(payload: GenerateRequest, user: dict = Depends(require_
     return _create(
         user["uid"], "weekly", monday.isoformat(), end.isoformat(), payload.language, payload.instructions
     )
+
+
+@router.post("/custom", response_model=Report, status_code=201)
+def create_custom_report(payload: CustomRequest, user: dict = Depends(require_user)):
+    """Báo cáo từ các note do người dùng tự chọn (gom nhiều ngày, lọc từng note)."""
+    db = get_db()
+    notes: list[dict] = []
+    for nid in dict.fromkeys(payload.note_ids):  # bỏ id trùng, giữ thứ tự
+        snap = db.collection("notes").document(nid).get()
+        data = snap.to_dict() if snap.exists else None
+        if not data or data.get("uid") != user["uid"]:
+            raise HTTPException(status_code=404, detail="Note not found")
+        notes.append(data)
+    dates = sorted(n.get("date", "") for n in notes)
+    try:
+        content, insights = generate_report(notes, "custom", payload.language, payload.instructions)
+    except AIReportError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    ref = db.collection(COLLECTION).document()
+    ref.set(
+        {
+            "uid": user["uid"],
+            "type": "custom",
+            "language": payload.language,
+            "period_start": dates[0],
+            "period_end": dates[-1],
+            "content": content,
+            "insights": insights,
+            "created_at": firestore.SERVER_TIMESTAMP,
+        }
+    )
+    return _to_report(ref.get())
 
 
 @router.get("", response_model=list[Report])

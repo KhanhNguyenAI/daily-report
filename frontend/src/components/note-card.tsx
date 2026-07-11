@@ -27,9 +27,12 @@ interface NoteCardProps {
   note: Note
   onDelete?: (id: string) => void
   onUpdate?: (id: string, changes: Partial<NoteInput>) => Promise<void>
+  /** Khi truyền vào, note thu gọn còn 2 dòng và bấm vào card để mở/đóng. */
+  collapsed?: boolean
+  onToggleCollapse?: () => void
 }
 
-export function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
+export function NoteCard({ note, onDelete, onUpdate, collapsed, onToggleCollapse }: NoteCardProps) {
   const [editing, setEditing] = useState(false)
   const [content, setContent] = useState(note.content)
   const [mood, setMood] = useState<number | null>(note.mood)
@@ -118,10 +121,25 @@ export function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
     )
   }
 
+  const collapsible = onToggleCollapse !== undefined
+
   return (
-    <Card className="group py-4 shadow-none transition-shadow hover:shadow-md">
+    <Card
+      className={`group py-4 shadow-none transition-shadow hover:shadow-md ${
+        collapsible ? "cursor-pointer" : ""
+      }`}
+      onClick={collapsible ? onToggleCollapse : undefined}
+    >
       <CardContent className="px-5">
         <div className="mb-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+          {collapsible && (
+            <span
+              aria-hidden
+              className={`text-[10px] transition-transform ${collapsed ? "" : "rotate-90"}`}
+            >
+              ▶
+            </span>
+          )}
           <span className="font-medium tabular-nums">{formatTime(note.created_at)}</span>
           {note.mood && <span className="text-sm">{moodEmoji(note.mood)}</span>}
           {note.tags.map((t) => (
@@ -133,7 +151,10 @@ export function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
             {onUpdate && (
               <button
                 type="button"
-                onClick={startEdit}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  startEdit()
+                }}
                 className="rounded-full px-1.5 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-primary focus-visible:opacity-100"
                 aria-label="Edit note"
               >
@@ -143,7 +164,10 @@ export function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
             {onDelete && (
               <button
                 type="button"
-                onClick={() => onDelete(note.id)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete(note.id)
+                }}
                 className="rounded-full px-1.5 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100"
                 aria-label="Delete note"
               >
@@ -152,7 +176,13 @@ export function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
             )}
           </span>
         </div>
-        <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{note.content}</p>
+        <p
+          className={`whitespace-pre-wrap text-[15px] leading-relaxed ${
+            collapsible && collapsed ? "line-clamp-2 text-muted-foreground" : ""
+          }`}
+        >
+          {note.content}
+        </p>
       </CardContent>
     </Card>
   )

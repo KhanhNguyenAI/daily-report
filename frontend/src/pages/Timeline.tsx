@@ -5,6 +5,7 @@ import { toast } from "sonner"
 
 import { deleteNote, listNotes, updateNote, type Note, type NoteInput } from "@/api/notes"
 import {
+  createCustomReport,
   createDailyReport,
   downloadReportDocx,
   listReports,
@@ -33,6 +34,14 @@ function iso(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
     d.getDate(),
   ).padStart(2, "0")}`
+}
+
+function dayLabel(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString("en-US", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  })
 }
 
 interface Cell {
@@ -64,6 +73,15 @@ export function Timeline() {
   const [generating, setGenerating] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [printing, setPrinting] = useState<Report | null>(null)
+  // Note mặc định thu gọn để nhìn tổng quát cả ngày; set chứa id các note đang mở
+  const [openNotes, setOpenNotes] = useState<Set<string>>(new Set())
+  const [reportOpen, setReportOpen] = useState(true)
+  // Chế độ chọn nhiều ngày cho custom report
+  const [selectMode, setSelectMode] = useState(false)
+  const [pickedNotes, setPickedNotes] = useState<Set<string>>(new Set())
+  // Snapshot note của từng ngày lúc chọn — vẫn đúng khi người dùng chuyển tháng
+  const [pickedDayNotes, setPickedDayNotes] = useState<Map<string, Note[]>>(new Map())
+  const [openPickDays, setOpenPickDays] = useState<Set<string>>(new Set())
 
   const refresh = useCallback(async () => {
     const start = iso(new Date(year, month, 1))
@@ -120,6 +138,92 @@ export function Timeline() {
   function pickDay(date: string) {
     setSelected(date)
     setShowForm(false)
+    setOpenNotes(new Set())
+    setReportOpen(true)
+  }
+
+  function toggleNote(id: string) {
+    setOpenNotes((cur) => {
+      const next = new Set(cur)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const anyNoteOpen = dayNotes.some((n) => openNotes.has(n.id))
+
+  function toggleAllNotes() {
+    setOpenNotes(anyNoteOpen ? new Set() : new Set(dayNotes.map((n) => n.id)))
+  }
+
+  /* ----- custom report: chọn nhiều ngày trên lịch ----- */
+
+  function toggleSelectMode() {
+    setSelectMode((v) => !v)
+    setPickedNotes(new Set())
+    setPickedDayNotes(new Map())
+    setOpenPickDays(new Set())
+  }
+
+  function togglePickDay(date: string) {
+    const nextDays = new Map(pickedDayNotes)
+    const nextIds = new Set(pickedNotes)
+    const picked = nextDays.get(date)
+    if (picked) {
+      for (const n of picked) nextIds.delete(n.id)
+      nextDays.delete(date)
+    } else {
+      const notesOfDay = byDay.get(date)
+      if (!notesOfDay?.length) return
+      nextDays.set(date, notesOfDay)
+      for (const n of notesOfDay) nextIds.add(n.id) // mặc định lấy cả ngày
+    }
+    setPickedDayNotes(nextDays)
+    setPickedNotes(nextIds)
+  }
+
+  function togglePickNote(date: string, id: string) {
+    const nextIds = new Set(pickedNotes)
+    if (nextIds.has(id)) nextIds.delete(id)
+    else nextIds.add(id)
+    // bỏ note cuối cùng của ngày → bỏ luôn ngày
+    const notesOfDay = pickedDayNotes.get(date) ?? []
+    if (!notesOfDay.some((n) => nextIds.has(n.id))) {
+      const nextDays = new Map(pickedDayNotes)
+      nextDays.delete(date)
+      setPickedDayNotes(nextDays)
+    }
+    setPickedNotes(nextIds)
+  }
+
+  function toggleOpenPickDay(date: string) {
+    setOpenPickDays((cur) => {
+      const next = new Set(cur)
+      if (next.has(date)) next.delete(date)
+      else next.add(date)
+      return next
+    })
+  }
+
+  const pickedDates = [...pickedDayNotes.keys()].sort()
+
+  async function generateCustom() {
+    setGenerating(true)
+    try {
+      saveInstructions(instructions)
+      const ids = pickedDates.flatMap((d) =>
+        (pickedDayNotes.get(d) ?? []).filter((n) => pickedNotes.has(n.id)).map((n) => n.id),
+      )
+      const report = await createCustomReport(ids, language, instructions.trim())
+      toast.success("Custom report created ✨ — see the Reports tab")
+      setReports((cur) => [report, ...cur])
+      toggleSelectMode()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to create report")
+    } finally {
+      setGenerating(false)
+    }
   }
 
   function pickLanguage(l: ReportLanguage) {
@@ -223,7 +327,18 @@ export function Timeline() {
         <CardContent>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold">{monthLabel}</h2>
-            <div className="flex gap-1">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={toggleSelectMode}
+                className={`mr-1 rounded-full border px-3 py-1 text-xs transition ${
+                  selectMode
+                    ? "border-primary bg-accent font-medium text-accent-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {selectMode ? "✕ Exit selection" : "☑ Custom report"}
+              </button>
               <Button variant="ghost" size="icon" aria-label="Previous month" onClick={() => shiftMonth(-1)}>
                 ‹
               </Button>
@@ -232,6 +347,11 @@ export function Timeline() {
               </Button>
             </div>
           </div>
+          {selectMode && (
+            <p className="mb-2 text-xs text-muted-foreground">
+              Selection mode — click days with notes to include them in the report.
+            </p>
+          )}
           <div className="grid grid-cols-7 gap-1 text-center">
             {DOW.map((d) => (
               <span key={d} className="py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -241,17 +361,20 @@ export function Timeline() {
             {cells.map((c) => {
               const has = byDay.has(c.date)
               const hasReport = reportByDay.has(c.date)
-              const isSelected = c.date === selected
+              const isSelected = selectMode ? pickedDayNotes.has(c.date) : c.date === selected
               return (
                 <button
                   key={c.date}
                   type="button"
-                  onClick={() => pickDay(c.date)}
+                  disabled={selectMode && !has}
+                  onClick={() => (selectMode ? togglePickDay(c.date) : pickDay(c.date))}
                   className={`relative rounded-lg border-2 py-2 text-sm tabular-nums transition ${
                     !c.inMonth ? "text-muted-foreground/40" : has ? "font-semibold" : "text-muted-foreground"
                   } ${has ? "bg-accent text-accent-foreground" : "hover:bg-muted"} ${
                     hasReport ? "border-primary" : "border-transparent"
-                  } ${isSelected ? "ring-2 ring-primary/50" : ""}`}
+                  } ${isSelected ? "ring-2 ring-primary/50" : ""} ${
+                    selectMode && !has ? "cursor-not-allowed opacity-40" : ""
+                  }`}
                 >
                   {c.day}
                   {has && (
@@ -277,20 +400,151 @@ export function Timeline() {
       </Card>
 
       <div className="grid gap-5">
+        {selectMode ? (
+          <Card className="shadow-none">
+            <CardContent>
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Custom report · {pickedDates.length} {pickedDates.length === 1 ? "day" : "days"}
+              </h2>
+              {pickedDates.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  👈 Click days with notes on the calendar to start.
+                </p>
+              ) : (
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    {pickedDates.map((date) => {
+                      const notesOfDay = pickedDayNotes.get(date) ?? []
+                      const nPicked = notesOfDay.filter((n) => pickedNotes.has(n.id)).length
+                      const isOpen = openPickDays.has(date)
+                      return (
+                        <div key={date} className="rounded-xl border bg-background/40">
+                          <div className="flex items-center gap-2 px-3 py-2 text-sm">
+                            <span className="font-medium">{dayLabel(date)}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {nPicked}/{notesOfDay.length} {notesOfDay.length === 1 ? "note" : "notes"}
+                            </span>
+                            {notesOfDay.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleOpenPickDay(date)}
+                                className="ml-auto rounded-full px-2 py-0.5 text-xs text-primary transition hover:bg-accent"
+                              >
+                                {isOpen ? "▾ hide notes" : "▸ pick notes"}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => togglePickDay(date)}
+                              className={`rounded-full px-1.5 text-muted-foreground transition hover:text-destructive ${
+                                notesOfDay.length > 1 ? "" : "ml-auto"
+                              }`}
+                              aria-label="Remove this day"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          {isOpen && (
+                            <div className="grid gap-1.5 border-t px-3 py-2">
+                              {notesOfDay.map((n) => (
+                                <label
+                                  key={n.id}
+                                  className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={pickedNotes.has(n.id)}
+                                    onChange={() => togglePickNote(date, n.id)}
+                                    className="mt-0.5 accent-primary"
+                                  />
+                                  <span className="truncate">
+                                    {new Date(n.created_at).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                    {" — "}
+                                    {n.content.slice(0, 70)}
+                                    {n.content.length > 70 ? "…" : ""}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Language:</span>
+                    <div className="flex gap-1" role="group" aria-label="Report language">
+                      {LANGUAGES.map((l) => (
+                        <button
+                          key={l.value}
+                          type="button"
+                          aria-pressed={language === l.value}
+                          onClick={() => pickLanguage(l.value)}
+                          className={`rounded-full border px-3 py-1 text-sm transition ${
+                            language === l.value
+                              ? "border-primary bg-accent font-medium text-accent-foreground"
+                              : "border-border text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {l.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <Textarea
+                    placeholder="Format request (optional) — e.g. follow the company template 業務内容／進捗／所感…"
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
+                    maxLength={500}
+                    className="min-h-16 bg-muted/50 text-sm"
+                    aria-label="Report format instructions"
+                  />
+                  <div className="flex items-center gap-3">
+                    <Button
+                      className="rounded-full shadow-sm"
+                      disabled={generating || pickedNotes.size === 0}
+                      onClick={generateCustom}
+                    >
+                      {generating ? "Writing report…" : "✨ Create custom report"}
+                    </Button>
+                    <span className="text-xs font-medium text-primary">
+                      {pickedNotes.size} {pickedNotes.size === 1 ? "note" : "notes"} selected
+                    </span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <>
         <div>
-          <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            {selectedLabel} · {dayNotes.length} {dayNotes.length === 1 ? "note" : "notes"}
-            {dayNotes.some((n) => n.mood) && (
-              <span className="ml-1 text-sm">
-                {moodEmoji(
-                  Math.round(
-                    dayNotes.filter((n) => n.mood).reduce((s, n) => s + (n.mood as number), 0) /
-                      dayNotes.filter((n) => n.mood).length,
-                  ),
-                )}
-              </span>
+          <div className="mb-3 flex items-baseline gap-2 px-1">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              {selectedLabel} · {dayNotes.length} {dayNotes.length === 1 ? "note" : "notes"}
+              {dayNotes.some((n) => n.mood) && (
+                <span className="ml-1 text-sm">
+                  {moodEmoji(
+                    Math.round(
+                      dayNotes.filter((n) => n.mood).reduce((s, n) => s + (n.mood as number), 0) /
+                        dayNotes.filter((n) => n.mood).length,
+                    ),
+                  )}
+                </span>
+              )}
+            </h2>
+            {dayNotes.length > 0 && (
+              <button
+                type="button"
+                onClick={toggleAllNotes}
+                className="ml-auto rounded-full px-2 py-0.5 text-xs text-primary transition hover:bg-accent"
+              >
+                {anyNoteOpen ? "▾ Collapse all" : "▸ Expand all"}
+              </button>
             )}
-          </h2>
+          </div>
           {dayNotes.length === 0 ? (
             <Card className="border-dashed shadow-none">
               <CardContent className="py-12 text-center">
@@ -301,7 +555,14 @@ export function Timeline() {
           ) : (
             <div className="grid gap-3">
               {dayNotes.map((n) => (
-                <NoteCard key={n.id} note={n} onDelete={remove} onUpdate={update} />
+                <NoteCard
+                  key={n.id}
+                  note={n}
+                  onDelete={remove}
+                  onUpdate={update}
+                  collapsed={!openNotes.has(n.id)}
+                  onToggleCollapse={() => toggleNote(n.id)}
+                />
               ))}
             </div>
           )}
@@ -313,15 +574,33 @@ export function Timeline() {
               Report for this day
             </h2>
             {dayReport && !showForm ? (
-              <div className="rounded-xl border border-l-4 border-l-primary bg-background/40 p-4">
-                <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="overflow-hidden rounded-xl border border-l-4 border-l-primary bg-background/40">
+                <button
+                  type="button"
+                  onClick={() => setReportOpen((v) => !v)}
+                  aria-expanded={reportOpen}
+                  className="flex w-full items-center gap-2 p-4 text-left text-xs text-muted-foreground"
+                >
+                  <span
+                    aria-hidden
+                    className={`text-[10px] text-primary transition-transform ${reportOpen ? "rotate-90" : ""}`}
+                  >
+                    ▶
+                  </span>
                   <Badge className="rounded-full uppercase">daily</Badge>
                   <span className="uppercase">{dayReport.language}</span>
-                </div>
-                <div className="report-body">
-                  <ReactMarkdown>{dayReport.content}</ReactMarkdown>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
+                  {!reportOpen && (
+                    <span className="truncate">
+                      {markdownToPlain(dayReport.content).split("\n")[0]}
+                    </span>
+                  )}
+                </button>
+                {reportOpen && (
+                  <div className="px-4 pb-4">
+                    <div className="report-body">
+                      <ReactMarkdown>{dayReport.content}</ReactMarkdown>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -356,15 +635,17 @@ export function Timeline() {
                   >
                     🖨 PDF / Print
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full"
-                    onClick={() => setShowForm(true)}
-                  >
-                    ↻ Regenerate
-                  </Button>
-                </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => setShowForm(true)}
+                      >
+                        ↻ Regenerate
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : dayNotes.length === 0 ? (
               <p className="py-2 text-sm text-muted-foreground">
@@ -375,6 +656,8 @@ export function Timeline() {
             )}
           </CardContent>
         </Card>
+          </>
+        )}
       </div>
 
       {printing &&

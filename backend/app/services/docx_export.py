@@ -6,7 +6,7 @@ import re
 from docx import Document
 from docx.shared import Pt
 
-TITLE = {"daily": "Daily Report", "weekly": "Weekly Report"}
+TITLE = {"daily": "Daily Report", "weekly": "Weekly Report", "custom": "Work Report"}
 
 
 def _clean_inline(text: str) -> str:

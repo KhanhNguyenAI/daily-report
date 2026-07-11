@@ -6,7 +6,7 @@ export type ReportLanguage = "en" | "ja" | "vi"
 
 export interface Report {
   id: string
-  type: "daily" | "weekly"
+  type: "daily" | "weekly" | "custom"
   language: ReportLanguage
   period_start: string
   period_end: string
@@ -47,6 +47,13 @@ export function createWeeklyReport(language: ReportLanguage, date?: string, inst
   return request<Report>("/reports/weekly", {
     method: "POST",
     body: JSON.stringify({ language, date, instructions: instructions || undefined }),
+  })
+}
+
+export function createCustomReport(noteIds: string[], language: ReportLanguage, instructions?: string) {
+  return request<Report>("/reports/custom", {
+    method: "POST",
+    body: JSON.stringify({ note_ids: noteIds, language, instructions: instructions || undefined }),
   })
 }
 
