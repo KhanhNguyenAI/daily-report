@@ -3,7 +3,7 @@ import { createPortal } from "react-dom"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 
-import { deleteNote, listNotes, updateNote, type Note, type NoteInput } from "@/api/notes"
+import { createNote, deleteNote, listNotes, updateNote, type Note, type NoteInput } from "@/api/notes"
 import {
   createCustomReport,
   createDailyReport,
@@ -16,10 +16,11 @@ import {
   type Report,
   type ReportLanguage,
 } from "@/api/reports"
-import { moodEmoji, NoteCard } from "@/components/note-card"
+import { MOODS, moodEmoji, NoteCard } from "@/components/note-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
 const DOW = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
@@ -82,6 +83,12 @@ export function Timeline() {
   // Snapshot note của từng ngày lúc chọn — vẫn đúng khi người dùng chuyển tháng
   const [pickedDayNotes, setPickedDayNotes] = useState<Map<string, Note[]>>(new Map())
   const [openPickDays, setOpenPickDays] = useState<Set<string>>(new Set())
+  // Thêm note trực tiếp vào ngày đang chọn (kể cả ngày đã qua)
+  const [addingNote, setAddingNote] = useState(false)
+  const [newContent, setNewContent] = useState("")
+  const [newMood, setNewMood] = useState<number | null>(null)
+  const [newTags, setNewTags] = useState("")
+  const [savingNote, setSavingNote] = useState(false)
 
   const refresh = useCallback(async () => {
     const start = iso(new Date(year, month, 1))
@@ -140,6 +147,10 @@ export function Timeline() {
     setShowForm(false)
     setOpenNotes(new Set())
     setReportOpen(true)
+    setAddingNote(false)
+    setNewContent("")
+    setNewMood(null)
+    setNewTags("")
   }
 
   function toggleNote(id: string) {
@@ -268,6 +279,29 @@ export function Timeline() {
       await refresh()
     } catch {
       toast.error("Failed to update note")
+    }
+  }
+
+  async function addNote() {
+    if (!newContent.trim()) return
+    setSavingNote(true)
+    try {
+      await createNote({
+        content: newContent.trim(),
+        mood: newMood,
+        tags: newTags.split(",").map((t) => t.trim()).filter(Boolean),
+        date: selected,
+      })
+      toast.success("Note saved")
+      setAddingNote(false)
+      setNewContent("")
+      setNewMood(null)
+      setNewTags("")
+      await refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save note")
+    } finally {
+      setSavingNote(false)
     }
   }
 
@@ -535,16 +569,91 @@ export function Timeline() {
                 </span>
               )}
             </h2>
-            {dayNotes.length > 0 && (
-              <button
-                type="button"
-                onClick={toggleAllNotes}
-                className="ml-auto rounded-full px-2 py-0.5 text-xs text-primary transition hover:bg-accent"
-              >
-                {anyNoteOpen ? "▾ Collapse all" : "▸ Expand all"}
-              </button>
-            )}
+            <div className="ml-auto flex items-center gap-2">
+              {!addingNote && (
+                <button
+                  type="button"
+                  onClick={() => setAddingNote(true)}
+                  className="rounded-full px-2 py-0.5 text-xs text-primary transition hover:bg-accent"
+                >
+                  + Add note
+                </button>
+              )}
+              {dayNotes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={toggleAllNotes}
+                  className="rounded-full px-2 py-0.5 text-xs text-primary transition hover:bg-accent"
+                >
+                  {anyNoteOpen ? "▾ Collapse all" : "▸ Expand all"}
+                </button>
+              )}
+            </div>
           </div>
+          {addingNote && (
+            <Card className="mb-3 shadow-none ring-2 ring-primary/50">
+              <CardContent className="grid gap-3 px-5">
+                <Textarea
+                  placeholder={`Add a note for ${selectedLabel}…`}
+                  value={newContent}
+                  onChange={(e) => setNewContent(e.target.value)}
+                  className="min-h-24 text-[15px] leading-relaxed"
+                  aria-label="New note content"
+                  autoFocus
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex gap-1" role="group" aria-label="Mood">
+                    {MOODS.map((m) => (
+                      <button
+                        key={m.value}
+                        type="button"
+                        title={m.label}
+                        aria-pressed={newMood === m.value}
+                        onClick={() => setNewMood(newMood === m.value ? null : m.value)}
+                        className={`grid size-8 place-items-center rounded-full text-base transition-all duration-150 ${
+                          newMood === m.value
+                            ? "scale-110 bg-accent ring-2 ring-primary/60"
+                            : "opacity-45 grayscale hover:scale-110 hover:opacity-100 hover:grayscale-0"
+                        }`}
+                      >
+                        {m.emoji}
+                      </button>
+                    ))}
+                  </div>
+                  <Input
+                    placeholder="tags, comma separated"
+                    value={newTags}
+                    onChange={(e) => setNewTags(e.target.value)}
+                    className="h-8 max-w-48 flex-1 rounded-full border-none bg-muted px-4 text-sm shadow-none"
+                  />
+                  <div className="ml-auto flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() => {
+                        setAddingNote(false)
+                        setNewContent("")
+                        setNewMood(null)
+                        setNewTags("")
+                      }}
+                      disabled={savingNote}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="rounded-full"
+                      onClick={addNote}
+                      disabled={savingNote || !newContent.trim()}
+                    >
+                      {savingNote ? "Saving…" : "Save"}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           {dayNotes.length === 0 ? (
             <Card className="border-dashed shadow-none">
               <CardContent className="py-12 text-center">

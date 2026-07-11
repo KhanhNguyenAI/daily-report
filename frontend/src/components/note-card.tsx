@@ -4,6 +4,14 @@ import type { Note, NoteInput } from "@/api/notes"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -38,6 +46,7 @@ export function NoteCard({ note, onDelete, onUpdate, collapsed, onToggleCollapse
   const [mood, setMood] = useState<number | null>(note.mood)
   const [tags, setTags] = useState(note.tags.join(", "))
   const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   function startEdit() {
     setContent(note.content)
@@ -155,7 +164,7 @@ export function NoteCard({ note, onDelete, onUpdate, collapsed, onToggleCollapse
                   e.stopPropagation()
                   startEdit()
                 }}
-                className="rounded-full px-1.5 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-primary focus-visible:opacity-100"
+                className="rounded-full px-1.5 text-muted-foreground opacity-70 transition hover:text-primary focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                 aria-label="Edit note"
               >
                 ✎
@@ -166,9 +175,9 @@ export function NoteCard({ note, onDelete, onUpdate, collapsed, onToggleCollapse
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  onDelete(note.id)
+                  setConfirmDelete(true)
                 }}
-                className="rounded-full px-1.5 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100"
+                className="rounded-full px-1.5 text-muted-foreground opacity-70 transition hover:text-destructive focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                 aria-label="Delete note"
               >
                 ✕
@@ -184,6 +193,30 @@ export function NoteCard({ note, onDelete, onUpdate, collapsed, onToggleCollapse
           {note.content}
         </p>
       </CardContent>
+      {onDelete && (
+        <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <DialogContent onClick={(e) => e.stopPropagation()}>
+            <DialogHeader>
+              <DialogTitle>Delete this note?</DialogTitle>
+              <DialogDescription>This action cannot be undone.</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setConfirmDelete(false)
+                  onDelete(note.id)
+                }}
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </Card>
   )
 }
