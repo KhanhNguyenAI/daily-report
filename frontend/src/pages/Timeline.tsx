@@ -92,6 +92,7 @@ export function Timeline() {
   const [savingNote, setSavingNote] = useState(false)
   const [confirmDailyReport, setConfirmDailyReport] = useState(false)
   const [confirmCustomReport, setConfirmCustomReport] = useState(false)
+  const [confirmSaveNote, setConfirmSaveNote] = useState(false)
 
   const refresh = useCallback(async () => {
     const start = iso(new Date(year, month, 1))
@@ -647,7 +648,7 @@ export function Timeline() {
                     <Button
                       size="sm"
                       className="rounded-full"
-                      onClick={addNote}
+                      onClick={() => setConfirmSaveNote(true)}
                       disabled={savingNote || !newContent.trim()}
                     >
                       {savingNote ? "Saving…" : "Save"}
@@ -803,6 +804,14 @@ export function Timeline() {
         } using AI.`}
         confirmLabel="Create report"
         onConfirm={generateCustom}
+      />
+      <ConfirmDialog
+        open={confirmSaveNote}
+        onOpenChange={setConfirmSaveNote}
+        title="Save this note?"
+        description={`It will be added to ${selectedLabel}.`}
+        confirmLabel="Save"
+        onConfirm={addNote}
       />
     </div>
   )

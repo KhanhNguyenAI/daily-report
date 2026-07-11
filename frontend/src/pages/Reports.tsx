@@ -150,6 +150,7 @@ export function Reports() {
   const [generating, setGenerating] = useState(false)
   const [confirmWeeklyReport, setConfirmWeeklyReport] = useState(false)
   const [printing, setPrinting] = useState<Report | null>(null)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   function printReport(r: Report) {
     setPrinting(r)
@@ -310,7 +311,7 @@ export function Reports() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        removeReport(r.id)
+                        setPendingDeleteId(r.id)
                       }}
                       className="rounded-full px-1.5 text-muted-foreground transition hover:text-destructive"
                       aria-label="Delete report"
@@ -501,6 +502,15 @@ export function Reports() {
         description="This will generate a report from this week's notes using AI."
         confirmLabel="Create report"
         onConfirm={generateWeekly}
+      />
+      <ConfirmDialog
+        open={pendingDeleteId != null}
+        onOpenChange={(open) => !open && setPendingDeleteId(null)}
+        title="Delete this report?"
+        description="This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => pendingDeleteId && removeReport(pendingDeleteId)}
       />
     </div>
   )

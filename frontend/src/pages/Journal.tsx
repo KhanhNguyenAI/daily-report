@@ -73,6 +73,7 @@ export function Journal({ onReportCreated }: { onReportCreated?: () => void }) {
   const [tags, setTags] = useState("")
   const [saving, setSaving] = useState(false)
   const [confirmReport, setConfirmReport] = useState(false)
+  const [confirmSaveNote, setConfirmSaveNote] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -184,7 +185,7 @@ export function Journal({ onReportCreated }: { onReportCreated?: () => void }) {
               className="h-9 max-w-52 flex-1 rounded-full border-none bg-muted px-4 text-sm shadow-none"
             />
             <Button
-              onClick={save}
+              onClick={() => setConfirmSaveNote(true)}
               disabled={saving || !content.trim()}
               className="ml-auto rounded-full px-5 shadow-sm"
             >
@@ -273,6 +274,14 @@ export function Journal({ onReportCreated }: { onReportCreated?: () => void }) {
         description="This will generate a report from today's notes using AI."
         confirmLabel="Create report"
         onConfirm={generateReport}
+      />
+      <ConfirmDialog
+        open={confirmSaveNote}
+        onOpenChange={setConfirmSaveNote}
+        title="Save this note?"
+        description="It will be added to today's notes."
+        confirmLabel="Save"
+        onConfirm={save}
       />
     </div>
   )
