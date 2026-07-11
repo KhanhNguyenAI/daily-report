@@ -36,17 +36,17 @@ export function listReports() {
   return request<Report[]>("/reports")
 }
 
-export function createDailyReport(language: ReportLanguage, date?: string) {
+export function createDailyReport(language: ReportLanguage, date?: string, instructions?: string) {
   return request<Report>("/reports/daily", {
     method: "POST",
-    body: JSON.stringify({ language, date }),
+    body: JSON.stringify({ language, date, instructions: instructions || undefined }),
   })
 }
 
-export function createWeeklyReport(language: ReportLanguage, date?: string) {
+export function createWeeklyReport(language: ReportLanguage, date?: string, instructions?: string) {
   return request<Report>("/reports/weekly", {
     method: "POST",
-    body: JSON.stringify({ language, date }),
+    body: JSON.stringify({ language, date, instructions: instructions || undefined }),
   })
 }
 
@@ -78,4 +78,13 @@ export function markdownToPlain(md: string): string {
 
 export function savedLanguage(): ReportLanguage {
   return (localStorage.getItem("reportLanguage") as ReportLanguage) ?? "ja"
+}
+
+/** Yêu cầu định dạng gần nhất — mẫu báo cáo công ty thường cố định nên nhớ lại cho lần sau. */
+export function savedInstructions(): string {
+  return localStorage.getItem("reportInstructions") ?? ""
+}
+
+export function saveInstructions(value: string) {
+  localStorage.setItem("reportInstructions", value)
 }

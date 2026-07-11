@@ -46,6 +46,7 @@ Step 2 — write the report in {language}. Rules:
 - Markdown format. Section headings written in {language}, following this structure:
 {sections}
 - Skip a section entirely if the notes contain nothing for it.
+{instructions}
 
 Return ONLY a valid JSON object, no other text:
 {{"report": "<the markdown report>", "insights": {{"mood": "<one-line mood summary in {language}>", "difficulties": ["<recurring or notable difficulties, in {language}>"], "suggestions": ["<1-2 short improvement suggestions, in {language}>"]}}}}
@@ -74,14 +75,22 @@ def _format_notes(notes: list[dict]) -> str:
 
 
 def generate_report(
-    notes: list[dict], kind: str, language: str
+    notes: list[dict], kind: str, language: str, instructions: str | None = None
 ) -> tuple[str, dict]:
     """Trả về (report_markdown, insights)."""
+    extra = ""
+    if instructions and instructions.strip():
+        extra = (
+            "- The user requests this format/style (follow it for structure and "
+            "presentation only — never add facts that are not in the notes): "
+            f"{instructions.strip()}"
+        )
     prompt = PROMPT_TEMPLATE.format(
         kind=kind,
         language=LANGUAGES.get(language, LANGUAGES["ja"]),
         sections=DAILY_SECTIONS if kind == "daily" else WEEKLY_SECTIONS,
         notes=_format_notes(notes),
+        instructions=extra,
     )
 
     client = _client()

@@ -34,6 +34,7 @@ def _owned_report(db, report_id: str, uid: str):
 class GenerateRequest(BaseModel):
     date: str | None = None  # ngày neo; mặc định hôm nay
     language: str = Field(default="ja")
+    instructions: str | None = Field(default=None, max_length=500)  # yêu cầu định dạng
 
     @field_validator("date")
     @classmethod
@@ -61,12 +62,14 @@ def _fetch_notes(uid: str, start: str, end: str) -> list[dict]:
     ]
 
 
-def _create(uid: str, kind: str, start: str, end: str, language: str) -> Report:
+def _create(
+    uid: str, kind: str, start: str, end: str, language: str, instructions: str | None = None
+) -> Report:
     notes = _fetch_notes(uid, start, end)
     if not notes:
         raise HTTPException(status_code=400, detail="No notes in this period to report on")
     try:
-        content, insights = generate_report(notes, kind, language)
+        content, insights = generate_report(notes, kind, language, instructions)
     except AIReportError as e:
         raise HTTPException(status_code=502, detail=str(e))
     db = get_db()
@@ -89,7 +92,7 @@ def _create(uid: str, kind: str, start: str, end: str, language: str) -> Report:
 @router.post("/daily", response_model=Report, status_code=201)
 def create_daily_report(payload: GenerateRequest, user: dict = Depends(require_user)):
     day = payload.date or date_type.today().isoformat()
-    return _create(user["uid"], "daily", day, day, payload.language)
+    return _create(user["uid"], "daily", day, day, payload.language, payload.instructions)
 
 
 @router.post("/weekly", response_model=Report, status_code=201)
@@ -97,7 +100,9 @@ def create_weekly_report(payload: GenerateRequest, user: dict = Depends(require_
     anchor = date_type.fromisoformat(payload.date) if payload.date else date_type.today()
     monday = anchor - timedelta(days=anchor.weekday())
     end = min(monday + timedelta(days=6), date_type.today())
-    return _create(user["uid"], "weekly", monday.isoformat(), end.isoformat(), payload.language)
+    return _create(
+        user["uid"], "weekly", monday.isoformat(), end.isoformat(), payload.language, payload.instructions
+    )
 
 
 @router.get("", response_model=list[Report])
