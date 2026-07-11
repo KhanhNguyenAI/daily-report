@@ -4,14 +4,7 @@ import type { Note, NoteInput } from "@/api/notes"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -127,27 +120,14 @@ export function NoteCard({ note, onDelete, onUpdate, collapsed, onToggleCollapse
             </div>
           </div>
         </CardContent>
-        <Dialog open={confirmSave} onOpenChange={setConfirmSave}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Save these changes?</DialogTitle>
-              <DialogDescription>The note's content will be updated.</DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setConfirmSave(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  setConfirmSave(false)
-                  save()
-                }}
-              >
-                Save
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <ConfirmDialog
+          open={confirmSave}
+          onOpenChange={setConfirmSave}
+          title="Save these changes?"
+          description="The note's content will be updated."
+          confirmLabel="Save"
+          onConfirm={save}
+        />
       </Card>
     )
   }
@@ -216,28 +196,15 @@ export function NoteCard({ note, onDelete, onUpdate, collapsed, onToggleCollapse
         </p>
       </CardContent>
       {onDelete && (
-        <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-          <DialogContent onClick={(e) => e.stopPropagation()}>
-            <DialogHeader>
-              <DialogTitle>Delete this note?</DialogTitle>
-              <DialogDescription>This action cannot be undone.</DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setConfirmDelete(false)}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  setConfirmDelete(false)
-                  onDelete(note.id)
-                }}
-              >
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <ConfirmDialog
+          open={confirmDelete}
+          onOpenChange={setConfirmDelete}
+          title="Delete this note?"
+          description="This action cannot be undone."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => onDelete(note.id)}
+        />
       )}
     </Card>
   )

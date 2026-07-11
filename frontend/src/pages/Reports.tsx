@@ -16,6 +16,7 @@ import {
   type Report,
   type ReportLanguage,
 } from "@/api/reports"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { moodEmoji } from "@/components/note-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -147,6 +148,7 @@ export function Reports() {
   // id các báo cáo đang mở — rỗng nghĩa là đóng hết, không ép ô nào phải mở
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [generating, setGenerating] = useState(false)
+  const [confirmWeeklyReport, setConfirmWeeklyReport] = useState(false)
   const [printing, setPrinting] = useState<Report | null>(null)
 
   function printReport(r: Report) {
@@ -413,7 +415,7 @@ export function Reports() {
             <Button
               className="rounded-full shadow-sm"
               disabled={generating}
-              onClick={generateWeekly}
+              onClick={() => setConfirmWeeklyReport(true)}
             >
               {generating ? "Writing report…" : "🗓 Weekly report"}
             </Button>
@@ -491,6 +493,15 @@ export function Reports() {
           </div>,
           document.body,
         )}
+
+      <ConfirmDialog
+        open={confirmWeeklyReport}
+        onOpenChange={setConfirmWeeklyReport}
+        title="Create weekly report?"
+        description="This will generate a report from this week's notes using AI."
+        confirmLabel="Create report"
+        onConfirm={generateWeekly}
+      />
     </div>
   )
 }

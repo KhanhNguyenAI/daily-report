@@ -16,6 +16,7 @@ import {
   type Report,
   type ReportLanguage,
 } from "@/api/reports"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { MOODS, moodEmoji, NoteCard } from "@/components/note-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -89,6 +90,8 @@ export function Timeline() {
   const [newMood, setNewMood] = useState<number | null>(null)
   const [newTags, setNewTags] = useState("")
   const [savingNote, setSavingNote] = useState(false)
+  const [confirmDailyReport, setConfirmDailyReport] = useState(false)
+  const [confirmCustomReport, setConfirmCustomReport] = useState(false)
 
   const refresh = useCallback(async () => {
     const start = iso(new Date(year, month, 1))
@@ -342,7 +345,7 @@ export function Timeline() {
         <Button
           className="rounded-full shadow-sm"
           disabled={generating || dayNotes.length === 0}
-          onClick={generate}
+          onClick={() => setConfirmDailyReport(true)}
         >
           {generating ? "Writing report…" : "✨ Create report for this day"}
         </Button>
@@ -540,7 +543,7 @@ export function Timeline() {
                     <Button
                       className="rounded-full shadow-sm"
                       disabled={generating || pickedNotes.size === 0}
-                      onClick={generateCustom}
+                      onClick={() => setConfirmCustomReport(true)}
                     >
                       {generating ? "Writing report…" : "✨ Create custom report"}
                     </Button>
@@ -782,6 +785,25 @@ export function Timeline() {
           </div>,
           document.body,
         )}
+
+      <ConfirmDialog
+        open={confirmDailyReport}
+        onOpenChange={setConfirmDailyReport}
+        title="Create report for this day?"
+        description="This will generate a report from this day's notes using AI."
+        confirmLabel="Create report"
+        onConfirm={generate}
+      />
+      <ConfirmDialog
+        open={confirmCustomReport}
+        onOpenChange={setConfirmCustomReport}
+        title="Create custom report?"
+        description={`This will generate a report from ${pickedNotes.size} selected ${
+          pickedNotes.size === 1 ? "note" : "notes"
+        } using AI.`}
+        confirmLabel="Create report"
+        onConfirm={generateCustom}
+      />
     </div>
   )
 }

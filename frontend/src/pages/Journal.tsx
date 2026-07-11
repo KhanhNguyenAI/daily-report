@@ -3,6 +3,7 @@ import { toast } from "sonner"
 
 import { createNote, deleteNote, listNotes, updateNote, type Note, type NoteInput } from "@/api/notes"
 import { createDailyReport, savedLanguage } from "@/api/reports"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { MOODS, moodEmoji, NoteCard } from "@/components/note-card"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -71,6 +72,7 @@ export function Journal({ onReportCreated }: { onReportCreated?: () => void }) {
   const [mood, setMood] = useState<number | null>(null)
   const [tags, setTags] = useState("")
   const [saving, setSaving] = useState(false)
+  const [confirmReport, setConfirmReport] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -129,6 +131,19 @@ export function Journal({ onReportCreated }: { onReportCreated?: () => void }) {
       await refresh()
     } catch {
       toast.error("Failed to update note")
+    }
+  }
+
+  async function generateReport() {
+    setReporting(true)
+    try {
+      await createDailyReport(savedLanguage())
+      toast.success("Daily report created ✨")
+      onReportCreated?.()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to create report")
+    } finally {
+      setReporting(false)
     }
   }
 
@@ -244,24 +259,21 @@ export function Journal({ onReportCreated }: { onReportCreated?: () => void }) {
             <Button
               className="rounded-full shadow-sm"
               disabled={notes.length === 0 || reporting}
-              onClick={async () => {
-                setReporting(true)
-                try {
-                  await createDailyReport(savedLanguage())
-                  toast.success("Daily report created ✨")
-                  onReportCreated?.()
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Failed to create report")
-                } finally {
-                  setReporting(false)
-                }
-              }}
+              onClick={() => setConfirmReport(true)}
             >
               {reporting ? "Writing report…" : "✨ Create daily report"}
             </Button>
           </CardContent>
         </Card>
       </div>
+      <ConfirmDialog
+        open={confirmReport}
+        onOpenChange={setConfirmReport}
+        title="Create daily report?"
+        description="This will generate a report from today's notes using AI."
+        confirmLabel="Create report"
+        onConfirm={generateReport}
+      />
     </div>
   )
 }
