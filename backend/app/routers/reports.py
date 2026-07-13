@@ -51,6 +51,10 @@ class GenerateRequest(BaseModel):
         return v
 
 
+class ReportUpdate(BaseModel):
+    content: str = Field(min_length=1, max_length=20_000)
+
+
 class CustomRequest(BaseModel):
     note_ids: list[str] = Field(min_length=1, max_length=200)
     language: str = Field(default="ja")
@@ -178,6 +182,16 @@ def download_report_docx(report_id: str, user: dict = Depends(require_user)):
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.patch("/{report_id}", response_model=Report)
+def update_report(report_id: str, payload: ReportUpdate, user: dict = Depends(require_user)):
+    """Cho phép người dùng chỉnh tay nội dung báo cáo đã sinh."""
+    db = get_db()
+    _owned_report(db, report_id, user["uid"])
+    ref = db.collection(COLLECTION).document(report_id)
+    ref.update({"content": payload.content})
+    return _to_report(ref.get())
 
 
 @router.delete("/{report_id}", status_code=204)

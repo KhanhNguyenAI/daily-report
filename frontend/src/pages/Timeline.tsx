@@ -10,13 +10,13 @@ import {
   downloadReportDocx,
   listReports,
   markdownToPlain,
-  savedInstructions,
-  saveInstructions,
   savedLanguage,
+  updateReport,
   type Report,
   type ReportLanguage,
 } from "@/api/reports"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { FormatPicker } from "@/components/format-picker"
 import { MOODS, moodEmoji, NoteCard } from "@/components/note-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -71,7 +71,7 @@ export function Timeline() {
   const [notes, setNotes] = useState<Note[]>([])
   const [reports, setReports] = useState<Report[]>([])
   const [language, setLanguage] = useState<ReportLanguage>(savedLanguage)
-  const [instructions, setInstructions] = useState(savedInstructions)
+  const [instructions, setInstructions] = useState("")
   const [generating, setGenerating] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [printing, setPrinting] = useState<Report | null>(null)
@@ -91,6 +91,9 @@ export function Timeline() {
   const [newTags, setNewTags] = useState("")
   const [savingNote, setSavingNote] = useState(false)
   const [confirmDailyReport, setConfirmDailyReport] = useState(false)
+  // Bản nháp khi sửa tay report của ngày — null nghĩa là không sửa
+  const [editDraft, setEditDraft] = useState<string | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   const [confirmCustomReport, setConfirmCustomReport] = useState(false)
   const [confirmSaveNote, setConfirmSaveNote] = useState(false)
 
@@ -149,6 +152,7 @@ export function Timeline() {
   function pickDay(date: string) {
     setSelected(date)
     setShowForm(false)
+    setEditDraft(null)
     setOpenNotes(new Set())
     setReportOpen(true)
     setAddingNote(false)
@@ -226,7 +230,6 @@ export function Timeline() {
   async function generateCustom() {
     setGenerating(true)
     try {
-      saveInstructions(instructions)
       const ids = pickedDates.flatMap((d) =>
         (pickedDayNotes.get(d) ?? []).filter((n) => pickedNotes.has(n.id)).map((n) => n.id),
       )
@@ -249,7 +252,6 @@ export function Timeline() {
   async function generate() {
     setGenerating(true)
     try {
-      saveInstructions(instructions)
       const report = await createDailyReport(language, selected, instructions.trim())
       toast.success("Daily report created ✨")
       setReports((cur) => [report, ...cur])
@@ -258,6 +260,21 @@ export function Timeline() {
       toast.error(e instanceof Error ? e.message : "Failed to create report")
     } finally {
       setGenerating(false)
+    }
+  }
+
+  async function saveEdit(report: Report) {
+    if (editDraft == null || !editDraft.trim()) return
+    setSavingEdit(true)
+    try {
+      const updated = await updateReport(report.id, editDraft.trim())
+      setReports((cur) => cur.map((r) => (r.id === updated.id ? updated : r)))
+      setEditDraft(null)
+      toast.success("Report updated")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update report")
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -331,17 +348,7 @@ export function Timeline() {
           ))}
         </div>
       </div>
-      <Textarea
-        placeholder="Format request (optional) — e.g. follow the company template 業務内容／進捗／所感, keep it under 200 words…"
-        value={instructions}
-        onChange={(e) => setInstructions(e.target.value)}
-        maxLength={500}
-        className="min-h-16 bg-muted/50 text-sm"
-        aria-label="Report format instructions"
-      />
-      <p className="-mt-1 text-xs text-muted-foreground">
-        Shapes the presentation only — content still comes from your notes. Remembered for next time.
-      </p>
+      <FormatPicker value={instructions} onChange={setInstructions} />
       <div className="flex gap-2">
         <Button
           className="rounded-full shadow-sm"
@@ -532,14 +539,7 @@ export function Timeline() {
                       ))}
                     </div>
                   </div>
-                  <Textarea
-                    placeholder="Format request (optional) — e.g. follow the company template 業務内容／進捗／所感…"
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    maxLength={500}
-                    className="min-h-16 bg-muted/50 text-sm"
-                    aria-label="Report format instructions"
-                  />
+                  <FormatPicker value={instructions} onChange={setInstructions} />
                   <div className="flex items-center gap-3">
                     <Button
                       className="rounded-full shadow-sm"
@@ -708,7 +708,37 @@ export function Timeline() {
                     </span>
                   )}
                 </button>
-                {reportOpen && (
+                {reportOpen && editDraft != null && (
+                  <div className="grid gap-3 px-4 pb-4">
+                    <Textarea
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      className="min-h-64 text-sm leading-relaxed"
+                      aria-label="Edit report content"
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="rounded-full"
+                        disabled={savingEdit || !editDraft.trim()}
+                        onClick={() => saveEdit(dayReport)}
+                      >
+                        {savingEdit ? "Saving…" : "Save changes"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="rounded-full"
+                        disabled={savingEdit}
+                        onClick={() => setEditDraft(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {reportOpen && editDraft == null && (
                   <div className="px-4 pb-4">
                     <div className="report-body">
                       <ReactMarkdown>{dayReport.content}</ReactMarkdown>
@@ -748,6 +778,14 @@ export function Timeline() {
                   >
                     🖨 PDF / Print
                   </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => setEditDraft(dayReport.content)}
+                      >
+                        ✏️ Edit
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"

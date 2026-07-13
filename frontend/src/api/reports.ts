@@ -61,6 +61,45 @@ export function deleteReport(id: string) {
   return request<void>(`/reports/${id}`, { method: "DELETE" })
 }
 
+export function updateReport(id: string, content: string) {
+  return request<Report>(`/reports/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ content }),
+  })
+}
+
+/* ---------- Định dạng báo cáo lưu sẵn (backend) ---------- */
+
+export interface ReportFormat {
+  id: string
+  name: string
+  content: string
+  is_default: boolean
+  created_at: string
+}
+
+export function listFormats() {
+  return request<ReportFormat[]>("/report-formats")
+}
+
+export function createFormat(name: string, content: string, isDefault = false) {
+  return request<ReportFormat>("/report-formats", {
+    method: "POST",
+    body: JSON.stringify({ name, content, is_default: isDefault }),
+  })
+}
+
+export function setDefaultFormat(id: string) {
+  return request<ReportFormat>(`/report-formats/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_default: true }),
+  })
+}
+
+export function deleteFormat(id: string) {
+  return request<void>(`/report-formats/${id}`, { method: "DELETE" })
+}
+
 export async function downloadReportDocx(report: Report) {
   const res = await fetch(`${API}/reports/${report.id}/docx`, { headers: await authHeader() })
   if (!res.ok) throw new Error(`Download failed: ${res.status}`)
@@ -85,13 +124,4 @@ export function markdownToPlain(md: string): string {
 
 export function savedLanguage(): ReportLanguage {
   return (localStorage.getItem("reportLanguage") as ReportLanguage) ?? "ja"
-}
-
-/** Yêu cầu định dạng gần nhất — mẫu báo cáo công ty thường cố định nên nhớ lại cho lần sau. */
-export function savedInstructions(): string {
-  return localStorage.getItem("reportInstructions") ?? ""
-}
-
-export function saveInstructions(value: string) {
-  localStorage.setItem("reportInstructions", value)
 }

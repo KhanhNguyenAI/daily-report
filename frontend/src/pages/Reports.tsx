@@ -10,13 +10,13 @@ import {
   downloadReportDocx,
   listReports,
   markdownToPlain,
-  savedInstructions,
-  saveInstructions,
   savedLanguage,
+  updateReport,
   type Report,
   type ReportLanguage,
 } from "@/api/reports"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { FormatPicker } from "@/components/format-picker"
 import { moodEmoji } from "@/components/note-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -144,13 +144,16 @@ export function Reports() {
   const [reports, setReports] = useState<Report[]>([])
   const [notes, setNotes] = useState<Note[]>([])
   const [language, setLanguage] = useState<ReportLanguage>(savedLanguage)
-  const [instructions, setInstructions] = useState(savedInstructions)
+  const [instructions, setInstructions] = useState("")
   // id các báo cáo đang mở — rỗng nghĩa là đóng hết, không ép ô nào phải mở
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [generating, setGenerating] = useState(false)
   const [confirmWeeklyReport, setConfirmWeeklyReport] = useState(false)
   const [printing, setPrinting] = useState<Report | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  // Report đang sửa tay: giữ bản nháp riêng, chỉ ghi đè khi bấm Save
+  const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
 
   function printReport(r: Report) {
     setPrinting(r)
@@ -185,7 +188,6 @@ export function Reports() {
   async function generateWeekly() {
     setGenerating(true)
     try {
-      saveInstructions(instructions)
       const report = await createWeeklyReport(language, undefined, instructions.trim())
       toast.success("Weekly report created ✨")
       setReports((cur) => [report, ...cur])
@@ -204,6 +206,21 @@ export function Reports() {
       setReports((cur) => cur.filter((r) => r.id !== id))
     } catch {
       toast.error("Failed to delete report")
+    }
+  }
+
+  async function saveEdit() {
+    if (!editing || !editing.draft.trim()) return
+    setSavingEdit(true)
+    try {
+      const updated = await updateReport(editing.id, editing.draft.trim())
+      setReports((cur) => cur.map((r) => (r.id === updated.id ? updated : r)))
+      setEditing(null)
+      toast.success("Report updated")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update report")
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -319,7 +336,37 @@ export function Reports() {
                       ✕
                     </button>
                   </div>
-                  {isOpen && (
+                  {isOpen && editing?.id === r.id && (
+                    <CardContent className="grid gap-3 px-5 pb-4">
+                      <Textarea
+                        value={editing.draft}
+                        onChange={(e) => setEditing({ id: r.id, draft: e.target.value })}
+                        className="min-h-64 text-sm leading-relaxed"
+                        aria-label="Edit report content"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="rounded-full"
+                          disabled={savingEdit || !editing.draft.trim()}
+                          onClick={saveEdit}
+                        >
+                          {savingEdit ? "Saving…" : "Save changes"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="rounded-full"
+                          disabled={savingEdit}
+                          onClick={() => setEditing(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </CardContent>
+                  )}
+                  {isOpen && editing?.id !== r.id && (
                     <CardContent className="px-5 pb-4">
                       <ReportBody content={r.content} />
                       <div className="mt-4 flex flex-wrap gap-2">
@@ -333,6 +380,14 @@ export function Reports() {
                           }}
                         >
                           📋 Copy
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full"
+                          onClick={() => setEditing({ id: r.id, draft: r.content })}
+                        >
+                          ✏️ Edit
                         </Button>
                         <Button
                           variant="outline"
@@ -402,17 +457,9 @@ export function Reports() {
                 ))}
               </div>
             </div>
-            <Textarea
-              placeholder="Format request (optional) — e.g. follow the company template 業務内容／進捗／所感…"
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              maxLength={500}
-              className="mb-1 min-h-16 bg-muted/50 text-sm"
-              aria-label="Report format instructions"
-            />
-            <p className="mb-4 text-xs text-muted-foreground">
-              Shapes the presentation only — content still comes from your notes. Remembered for next time.
-            </p>
+            <div className="mb-4">
+              <FormatPicker value={instructions} onChange={setInstructions} />
+            </div>
             <Button
               className="rounded-full shadow-sm"
               disabled={generating}

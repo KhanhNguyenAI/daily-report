@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import export, notes, reports
+from .routers import export, notes, report_formats, reports
 
 app = FastAPI(title="TakeNote API")
 
@@ -17,6 +17,7 @@ app.add_middleware(
 
 app.include_router(notes.router)
 app.include_router(reports.router)
+app.include_router(report_formats.router)
 app.include_router(export.router)
 
 
