@@ -19,6 +19,13 @@ COLLECTION = "report_formats"
 
 DEFAULT_NAME = "Mặc định"
 DEFAULT_CONTENT = (
+    "Giữ cấu trúc báo cáo mặc định (tóm tắt, công việc đã hoàn thành, khó khăn, "
+    "bài học); luôn thêm mục 翌日の予定 — dự định cho ngày làm việc tiếp theo — "
+    "ở cuối báo cáo, dựa trên công việc dang dở hoặc kế hoạch được nhắc trong note."
+)
+
+# Nội dung seed phiên bản đầu (chỉ 2 mục, làm báo cáo nghèo đi) — gặp thì nâng cấp
+_OLD_DEFAULT_CONTENT = (
     "Báo cáo gồm 2 mục chính: "
     "1) 学習および実施事項 — các công việc đã thực hiện và kiến thức đã học; "
     "2) 翌日の予定 — dự định cho ngày làm việc tiếp theo "
@@ -75,7 +82,12 @@ def _unset_other_defaults(db, uid: str, keep_id: str | None = None) -> None:
 @router.get("", response_model=list[ReportFormat])
 def list_formats(user: dict = Depends(require_user)):
     db = get_db()
-    formats = [_to_format(d) for d in _query(db, user["uid"]).stream()]
+    formats = []
+    for doc in _query(db, user["uid"]).stream():
+        if doc.to_dict().get("content") == _OLD_DEFAULT_CONTENT:
+            doc.reference.update({"content": DEFAULT_CONTENT})
+            doc = doc.reference.get()
+        formats.append(_to_format(doc))
     if not formats:
         # Người dùng mới: seed mẫu mặc định để luôn có 1 định dạng dùng ngay
         ref = db.collection(COLLECTION).document()
